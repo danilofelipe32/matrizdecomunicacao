@@ -8,47 +8,33 @@ import SectionSummary from './components/SectionSummary';
 import Results from './components/Results';
 import { AppState, initialState, AnswerStatus, UserData, Theme, AssessmentRecord, initialUserData } from './types';
 import { questionsData } from './constants';
-
-const STORAGE_KEY = 'communication_matrix_db_v1';
+import { db } from './db';
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(initialState);
   const [modal, setModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void } | null>(null);
 
-  // Load data on mount
+  // Inicializa DB e carrega dados
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
+    const initApp = async () => {
       try {
-        const parsed = JSON.parse(savedData);
-        // Migração simples ou carregamento
+        const records = await db.getAllRecords();
+        const savedTheme = await db.getTheme();
+        
         setState(prev => ({
-          ...initialState,
-          records: Array.isArray(parsed.records) ? parsed.records : [], // Carrega a lista
-          theme: parsed.theme || 'light',
-          view: 'login' // Force login screen on reload
+          ...prev,
+          records: records,
+          theme: savedTheme,
+          view: 'login' // Mantém o login no reload
         }));
       } catch (e) {
-        console.error('Error loading data', e);
+        console.error('Erro ao inicializar IndexedDB:', e);
       }
-    }
+    };
+    initApp();
   }, []);
 
-  // Save specific record whenever active data changes
-  useEffect(() => {
-    // Persist to LocalStorage
-    // We save the entire state structure (records list + theme preference)
-    // But we don't save the "active session" transiently if we are in login
-    if (state.view !== 'login') {
-       const stateToSave = {
-         records: state.records,
-         theme: state.theme
-       };
-       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
-    }
-  }, [state.records, state.theme, state.view]);
-
-  // Apply Theme
+  // Aplica tema visual
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove('dark', 'high-contrast');
@@ -60,7 +46,7 @@ const App: React.FC = () => {
     }
   }, [state.theme]);
 
-  // Helper to calculate progress for a record
+  // Helper para calcular progresso
   const calculateProgress = (answers: any) => {
     const total = questionsData.reduce((acc, q) => acc + q.levels.length, 0);
     let answered = 0;
@@ -72,15 +58,17 @@ const App: React.FC = () => {
     return Math.round((answered / total) * 100);
   };
 
-  // Sync active session data to the records list
+  // Sincroniza dados com o Estado e com o IndexedDB
+  // Esta função atualiza o estado local E salva o registro modificado no DB
   const syncToRecords = (updatedState: Partial<AppState>) => {
     setState(prev => {
         const newState = { ...prev, ...updatedState };
         
         if (newState.currentRecordId) {
+            // Encontra e atualiza o registro na lista
             const updatedRecords = prev.records.map(rec => {
                 if (rec.id === newState.currentRecordId) {
-                    return {
+                    const updatedRecord: AssessmentRecord = {
                         ...rec,
                         userData: newState.userData,
                         answers: newState.answers,
@@ -88,6 +76,11 @@ const App: React.FC = () => {
                         lastModified: Date.now(),
                         progress: calculateProgress(newState.answers)
                     };
+                    
+                    // Salva assincronamente no IndexedDB (Fire-and-forget para performance da UI)
+                    db.saveRecord(updatedRecord).catch(err => console.error("Erro ao salvar no DB:", err));
+                    
+                    return updatedRecord;
                 }
                 return rec;
             });
@@ -104,6 +97,7 @@ const App: React.FC = () => {
 
   const handleSetTheme = (theme: Theme) => {
     setState(prev => ({ ...prev, theme }));
+    db.saveTheme(theme).catch(err => console.error("Erro ao salvar tema:", err));
   };
 
   const handleLogin = () => {
@@ -114,9 +108,9 @@ const App: React.FC = () => {
     updateView('login');
   };
 
-  // --- RECORD MANAGEMENT ---
+  // --- GERENCIAMENTO DE REGISTROS ---
 
-  const handleCreateNewRecord = () => {
+  const handleCreateNewRecord = async () => {
     const newId = Date.now().toString();
     const newRecord: AssessmentRecord = {
         id: newId,
@@ -127,16 +121,23 @@ const App: React.FC = () => {
         progress: 0
     };
 
-    setState(prev => ({
-        ...prev,
-        records: [newRecord, ...prev.records], // Add to top
-        currentRecordId: newId,
-        userData: newRecord.userData,
-        answers: newRecord.answers,
-        currentSection: null,
-        activeQuestionIndex: 0,
-        view: 'registration'
-    }));
+    // Salva primeiro no DB para garantir
+    try {
+      await db.saveRecord(newRecord);
+      
+      setState(prev => ({
+          ...prev,
+          records: [newRecord, ...prev.records],
+          currentRecordId: newId,
+          userData: newRecord.userData,
+          answers: newRecord.answers,
+          currentSection: null,
+          activeQuestionIndex: 0,
+          view: 'registration'
+      }));
+    } catch (e) {
+      alert("Erro ao criar novo registro no banco de dados.");
+    }
   };
 
   const handleSelectRecord = (recordId: string) => {
@@ -148,8 +149,8 @@ const App: React.FC = () => {
             userData: record.userData,
             answers: record.answers,
             currentSection: record.currentSection,
-            activeQuestionIndex: 0, // Reset question index when loading
-            view: Object.keys(record.answers).length > 0 ? 'results' : 'registration' // Smart redirect
+            activeQuestionIndex: 0,
+            view: Object.keys(record.answers).length > 0 ? 'results' : 'registration'
         }));
     }
   };
@@ -163,7 +164,7 @@ const App: React.FC = () => {
             userData: record.userData,
             answers: record.answers,
             currentSection: record.currentSection,
-            view: 'registration' // Force registration view
+            view: 'registration'
         }));
     }
   };
@@ -173,24 +174,29 @@ const App: React.FC = () => {
         open: true,
         title: "Excluir Registro",
         message: "Tem certeza que deseja excluir esta avaliação permanentemente?",
-        onConfirm: () => {
-            setState(prev => ({
-                ...prev,
-                records: prev.records.filter(r => r.id !== recordId),
-                // If we deleted the active one, reset active state
-                ...(prev.currentRecordId === recordId ? {
-                    currentRecordId: null,
-                    userData: initialUserData,
-                    answers: {},
-                    currentSection: null
-                } : {})
-            }));
-            setModal(null);
+        onConfirm: async () => {
+            try {
+              await db.deleteRecord(recordId);
+              
+              setState(prev => ({
+                  ...prev,
+                  records: prev.records.filter(r => r.id !== recordId),
+                  ...(prev.currentRecordId === recordId ? {
+                      currentRecordId: null,
+                      userData: initialUserData,
+                      answers: {},
+                      currentSection: null
+                  } : {})
+              }));
+              setModal(null);
+            } catch (e) {
+              alert("Erro ao excluir registro.");
+            }
         }
     });
   };
 
-  // --- DATA HANDLERS (Now using syncToRecords) ---
+  // --- DATA HANDLERS ---
 
   const handleUpdateUserData = (field: keyof UserData, value: string) => {
     syncToRecords({
@@ -269,9 +275,6 @@ const App: React.FC = () => {
             currentSection: prevSection,
             activeQuestionIndex: prevQuestions.length - 1
         }));
-        // Need to sync currentSection back if we changed it going backwards
-        // (Though strictly speaking, currentSection in record usually tracks "furthest" or "current" progress. 
-        // For simplicity, we just update local state for navigation here).
         window.scrollTo(0, 0);
       } else {
         updateView('triage');
