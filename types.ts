@@ -1,14 +1,26 @@
 
-export type ViewState = 'login' | 'landing' | 'registration' | 'triage' | 'assessment' | 'sectionSummary' | 'results';
+export type ViewState = 'login' | 'landing' | 'registration' | 'triage' | 'assessment' | 'sectionSummary' | 'results' | 'procAssessment' | 'procResults';
 
 export type AnswerStatus = 'emergent' | 'mastered' | 'none';
 
 export type Theme = 'light' | 'dark' | 'high-contrast';
 
+export type AssessmentType = 'MATRIX' | 'PROC';
+
+// --- Matriz Types ---
 export interface AnswerData {
   [questionId: string]: {
     [level: number]: AnswerStatus;
   };
+}
+
+// --- PROC Types ---
+export interface ProcAnswers {
+  [questionId: string]: number; // ID da questão -> Valor da pontuação selecionada
+}
+
+export interface ProcChecklist {
+  [itemId: string]: boolean; // Checkboxes qualitativos
 }
 
 export interface UserData {
@@ -33,26 +45,35 @@ export interface UserData {
 
 export interface AssessmentRecord {
   id: string;
+  type: AssessmentType; // Novo campo para distinguir
   lastModified: number;
   userData: UserData;
-  answers: AnswerData;
+  answers: AnswerData; // Usado pela Matriz
+  procAnswers?: ProcAnswers; // Usado pelo PROC
+  procChecklist?: ProcChecklist; // Usado pelo PROC
   currentSection: string | null;
   progress: number;
 }
 
 export interface AppState {
   view: ViewState;
-  currentRecordId: string | null; // ID da avaliação ativa
-  records: AssessmentRecord[];    // Lista de todas as avaliações
+  currentRecordId: string | null;
+  records: AssessmentRecord[];
   
-  // Dados da sessão ativa (espelhados no record atual)
+  // Dados da sessão ativa
   currentSection: string | null;
   activeQuestionIndex: number;
   answers: AnswerData;
+  
+  // Dados PROC ativos
+  procAnswers: ProcAnswers;
+  procChecklist: ProcChecklist;
+
   userData: UserData;
   theme: Theme;
 }
 
+// ... (Resto das interfaces da Matriz mantidas para compatibilidade)
 export interface LevelDefinition {
   level: number;
   label: string;
@@ -101,6 +122,8 @@ export const initialState: AppState = {
   currentSection: null,
   activeQuestionIndex: 0,
   answers: {},
+  procAnswers: {},
+  procChecklist: {},
   userData: initialUserData,
   theme: 'light'
 };

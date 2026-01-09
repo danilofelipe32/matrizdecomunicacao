@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LogOut, Plus, Search, Trash2, Sun, Moon, Eye, Play, Calendar, User, Edit, Sparkles, Loader2 } from 'lucide-react';
+import { LogOut, Plus, Search, Trash2, Sun, Moon, Eye, Play, Calendar, User, Edit, Sparkles, Loader2, FileText, Activity, Filter, X } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { Theme, AssessmentRecord } from '../types';
+import { Theme, AssessmentRecord, AssessmentType } from '../types';
 
 interface DashboardProps {
   records: AssessmentRecord[];
   currentTheme: Theme;
   onSetTheme: (theme: Theme) => void;
-  onNewRecord: () => void;
+  onNewRecord: (type: AssessmentType) => void;
   onSelectRecord: (id: string) => void;
   onEditRecord: (id: string) => void;
   onDeleteRecord: (id: string) => void;
@@ -28,6 +28,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [useAI, setUseAI] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiMatches, setAiMatches] = useState<string[] | null>(null);
+  const [showTypeSelect, setShowTypeSelect] = useState(false);
+
+  // Filtros
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterMatrix, setFilterMatrix] = useState(true);
+  const [filterProc, setFilterProc] = useState(true);
+  const [dateStart, setDateStart] = useState('');
+  const [dateEnd, setDateEnd] = useState('');
 
   // Efeito para busca semântica com Debounce
   useEffect(() => {
@@ -49,7 +57,8 @@ const Dashboard: React.FC<DashboardProps> = ({
           name: r.userData.name,
           age: r.userData.age,
           diagnosis: r.userData.diagnosis,
-          obs: r.userData.observations
+          obs: r.userData.observations,
+          type: r.type
         }));
 
         const response = await ai.models.generateContent({
@@ -63,7 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           
           Instruções:
           1. Analise a query e os dados dos pacientes.
-          2. Identifique correspondências semânticas. Exemplo: se a busca for "autista", inclua pacientes com "TEA", "Autismo", ou descrições relacionadas. Se for "bebê", procure idades baixas.
+          2. Identifique correspondências semânticas. Exemplo: se a busca for "autista", inclua pacientes com "TEA", "Autismo", ou descrições relacionadas. Se for "PROC", filtre pelo tipo.
           3. Retorne APENAS um JSON array contendo as strings dos IDs dos registros relevantes.`,
           config: {
             responseMimeType: "application/json",
@@ -88,20 +97,38 @@ const Dashboard: React.FC<DashboardProps> = ({
 
   // Lógica de filtragem combinada
   const filteredRecords = useMemo(() => {
-    // Se não há termo, mostra tudo
-    if (!searchTerm.trim()) return records;
+    let result = records;
 
-    // Se IA está ativa e temos resultados (mesmo que vazio), usa os resultados da IA
-    if (useAI && aiMatches !== null) {
-      return records.filter(record => aiMatches.includes(record.id));
+    // 1. Filtro por Tipo
+    result = result.filter(r => {
+        const type = r.type || 'MATRIX'; // Assume MATRIX para registros antigos
+        if (type === 'MATRIX' && !filterMatrix) return false;
+        if (type === 'PROC' && !filterProc) return false;
+        return true;
+    });
+
+    // 2. Filtro por Data
+    if (dateStart) {
+        result = result.filter(r => r.userData.date >= dateStart);
+    }
+    if (dateEnd) {
+        result = result.filter(r => r.userData.date <= dateEnd);
     }
 
-    // Fallback: Busca padrão por texto
-    return records.filter(record => 
-      record.userData.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      record.userData.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [records, searchTerm, useAI, aiMatches]);
+    // 3. Filtro por Texto / IA
+    if (searchTerm.trim()) {
+      if (useAI && aiMatches !== null) {
+        result = result.filter(record => aiMatches.includes(record.id));
+      } else {
+        result = result.filter(record => 
+          record.userData.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          record.userData.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+    }
+
+    return result;
+  }, [records, searchTerm, useAI, aiMatches, filterMatrix, filterProc, dateStart, dateEnd]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-300">
@@ -141,42 +168,119 @@ const Dashboard: React.FC<DashboardProps> = ({
 
         {/* Actions Bar */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <button
-                onClick={onNewRecord}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 transform active:scale-95"
-            >
-                <Plus size={20} /> Nova Avaliação
-            </button>
-            
-            <div className="flex-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className={`transition-colors duration-300 ${useAI ? 'text-purple-500' : 'text-slate-400'}`} size={18} />
-                </div>
-                <input
-                    type="text"
-                    placeholder={useAI ? "Busca inteligente ativa..." : "Buscar por nome ou diagnóstico..."}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className={`w-full pl-10 pr-12 py-3 rounded-xl border transition-all duration-300 outline-none shadow-sm 
-                        ${useAI 
-                            ? 'border-purple-300 ring-2 ring-purple-100 dark:ring-purple-900/30 bg-purple-50/50 dark:bg-slate-800' 
-                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500'
-                        } text-slate-800 dark:text-white`}
-                />
+            <div className="relative">
                 <button
-                    onClick={() => setUseAI(!useAI)}
-                    className={`absolute inset-y-0 right-0 px-3 flex items-center gap-2 transition-colors duration-300 rounded-r-xl
-                        ${useAI ? 'text-purple-600 bg-purple-100/50 dark:bg-purple-900/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                    title={useAI ? "Desativar Busca IA" : "Ativar Busca Semântica (IA)"}
+                    onClick={() => setShowTypeSelect(!showTypeSelect)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center justify-center gap-2 transform active:scale-95 w-full md:w-auto"
                 >
-                    {aiLoading ? (
-                        <Loader2 size={18} className="animate-spin text-purple-600" />
-                    ) : (
-                        <Sparkles size={18} className={useAI ? "fill-purple-300" : ""} />
-                    )}
+                    <Plus size={20} /> Nova Avaliação
+                </button>
+                
+                {showTypeSelect && (
+                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-30 overflow-hidden fade-in">
+                        <button 
+                            onClick={() => { onNewRecord('MATRIX'); setShowTypeSelect(false); }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 border-b border-slate-100 dark:border-slate-700 transition"
+                        >
+                            <div className="bg-blue-100 dark:bg-blue-900 p-2 rounded-lg">
+                                <Activity size={18} className="text-blue-600 dark:text-blue-300" />
+                            </div>
+                            <div>
+                                <span className="block font-bold text-slate-800 dark:text-white text-sm">Matriz de Comunicação</span>
+                                <span className="block text-xs text-slate-500 dark:text-slate-400">Protocolo padrão</span>
+                            </div>
+                        </button>
+                        <button 
+                            onClick={() => { onNewRecord('PROC'); setShowTypeSelect(false); }}
+                            className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 transition"
+                        >
+                            <div className="bg-purple-100 dark:bg-purple-900 p-2 rounded-lg">
+                                <FileText size={18} className="text-purple-600 dark:text-purple-300" />
+                            </div>
+                             <div>
+                                <span className="block font-bold text-slate-800 dark:text-white text-sm">PROC</span>
+                                <span className="block text-xs text-slate-500 dark:text-slate-400">Obs. Comportamental</span>
+                            </div>
+                        </button>
+                    </div>
+                )}
+            </div>
+            
+            <div className="flex-1 flex gap-2">
+                <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className={`transition-colors duration-300 ${useAI ? 'text-purple-500' : 'text-slate-400'}`} size={18} />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder={useAI ? "Busca inteligente ativa..." : "Buscar por nome ou diagnóstico..."}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className={`w-full pl-10 pr-12 py-3 rounded-xl border transition-all duration-300 outline-none shadow-sm 
+                            ${useAI 
+                                ? 'border-purple-300 ring-2 ring-purple-100 dark:ring-purple-900/30 bg-purple-50/50 dark:bg-slate-800' 
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500'
+                            } text-slate-800 dark:text-white`}
+                    />
+                    <button
+                        onClick={() => setUseAI(!useAI)}
+                        className={`absolute inset-y-0 right-0 px-3 flex items-center gap-2 transition-colors duration-300 rounded-r-xl
+                            ${useAI ? 'text-purple-600 bg-purple-100/50 dark:bg-purple-900/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                        title={useAI ? "Desativar Busca IA" : "Ativar Busca Semântica (IA)"}
+                    >
+                        {aiLoading ? (
+                            <Loader2 size={18} className="animate-spin text-purple-600" />
+                        ) : (
+                            <Sparkles size={18} className={useAI ? "fill-purple-300" : ""} />
+                        )}
+                    </button>
+                </div>
+                
+                <button 
+                    onClick={() => setShowFilters(!showFilters)}
+                    title="Filtrar"
+                    className={`px-4 rounded-xl border flex items-center gap-2 transition-colors ${showFilters ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700'}`}
+                >
+                    <Filter size={18} />
+                    <span className="hidden md:inline text-sm font-medium">Filtros</span>
                 </button>
             </div>
         </div>
+
+        {/* Filters Panel */}
+        {showFilters && (
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 fade-in">
+                {/* Type Toggles */}
+                <div className="flex flex-col gap-2">
+                     <label className="text-xs font-bold text-slate-500 uppercase">Tipo de Avaliação</label>
+                     <div className="flex gap-2">
+                         <button onClick={() => setFilterMatrix(!filterMatrix)} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition ${filterMatrix ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-300' : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-700 dark:border-slate-600'}`}>
+                            <Activity size={16} /> Matriz
+                         </button>
+                         <button onClick={() => setFilterProc(!filterProc)} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition ${filterProc ? 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-300' : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-700 dark:border-slate-600'}`}>
+                            <FileText size={16} /> PROC
+                         </button>
+                     </div>
+                </div>
+
+                {/* Date Range */}
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Data Inicial</label>
+                    <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white text-sm w-full" />
+                </div>
+                <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase">Data Final</label>
+                    <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white text-sm w-full" />
+                </div>
+
+                {/* Clear Filters */}
+                 <div className="flex items-end">
+                    <button onClick={() => { setFilterMatrix(true); setFilterProc(true); setDateStart(''); setDateEnd(''); }} className="w-full px-4 py-2 text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition">
+                        <X size={16} /> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        )}
 
         {/* Records List */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -193,7 +297,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-full mb-4 inline-flex">
                         <Search size={24} className="text-slate-300 dark:text-slate-500" />
                     </div>
-                    <p>Nenhum registro encontrado para "{searchTerm}".</p>
+                    <p>Nenhum registro encontrado com os filtros atuais.</p>
                     {useAI && <p className="text-xs text-purple-500 mt-2">A busca semântica não encontrou correspondências relevantes.</p>}
                 </div>
             ) : (
@@ -205,7 +309,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     <h3 className="text-lg font-bold text-slate-800 dark:text-white truncate">
                                         {record.userData.name || 'Sem nome'}
                                     </h3>
-                                    {record.progress > 0 && (
+                                    {/* Badge do Tipo */}
+                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${record.type === 'PROC' ? 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/50 dark:text-purple-300 dark:border-purple-800' : 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800'}`}>
+                                        {record.type || 'MATRIX'}
+                                    </span>
+                                    {record.progress > 0 && record.type !== 'PROC' && (
                                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${record.progress === 100 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'}`}>
                                             {record.progress === 100 ? 'Concluído' : `${record.progress}%`}
                                         </span>
@@ -232,7 +340,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                                     className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 hover:border-blue-400 dark:hover:border-blue-500 text-slate-700 dark:text-slate-200 rounded-lg transition shadow-sm hover:shadow-md font-medium text-sm group-hover:bg-blue-50 dark:group-hover:bg-slate-700"
                                 >
                                     <Play size={16} className="text-blue-600 dark:text-blue-400" /> 
-                                    {Object.keys(record.answers).length > 0 ? 'Continuar' : 'Iniciar'}
+                                    {(record.type === 'PROC' || Object.keys(record.answers).length > 0) ? 'Continuar' : 'Iniciar'}
                                 </button>
                                 <button
                                     onClick={() => onEditRecord(record.id)}
