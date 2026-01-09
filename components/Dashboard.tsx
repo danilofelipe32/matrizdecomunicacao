@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { LogOut, Plus, Search, Trash2, Sun, Moon, Eye, Play, Calendar, User, Edit } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { LogOut, Plus, Search, Trash2, Sun, Moon, Eye, Play, Calendar, User, Edit, Sparkles, Loader2 } from 'lucide-react';
+import { GoogleGenAI, Type } from "@google/genai";
 import { Theme, AssessmentRecord } from '../types';
 
 interface DashboardProps {
@@ -24,11 +25,83 @@ const Dashboard: React.FC<DashboardProps> = ({
   onLogout 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [useAI, setUseAI] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMatches, setAiMatches] = useState<string[] | null>(null);
 
-  const filteredRecords = records.filter(record => 
-    record.userData.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    record.userData.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Efeito para busca semântica com Debounce
+  useEffect(() => {
+    // Se IA estiver desligada ou busca vazia, reseta
+    if (!useAI || !searchTerm.trim()) {
+      setAiMatches(null);
+      setAiLoading(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setAiLoading(true);
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Simplifica os registros para o contexto da IA
+        const condensedRecords = records.map(r => ({
+          id: r.id,
+          name: r.userData.name,
+          age: r.userData.age,
+          diagnosis: r.userData.diagnosis,
+          obs: r.userData.observations
+        }));
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: `Atue como um assistente de busca inteligente para uma clínica de fonoaudiologia.
+          
+          Query do usuário: "${searchTerm}"
+          
+          Lista de Pacientes (JSON):
+          ${JSON.stringify(condensedRecords)}
+          
+          Instruções:
+          1. Analise a query e os dados dos pacientes.
+          2. Identifique correspondências semânticas. Exemplo: se a busca for "autista", inclua pacientes com "TEA", "Autismo", ou descrições relacionadas. Se for "bebê", procure idades baixas.
+          3. Retorne APENAS um JSON array contendo as strings dos IDs dos registros relevantes.`,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          }
+        });
+
+        const matches = JSON.parse(response.text || '[]');
+        setAiMatches(matches);
+      } catch (error) {
+        console.error("Erro na busca semântica:", error);
+      } finally {
+        setAiLoading(false);
+      }
+    }, 800); // 800ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, useAI, records]);
+
+  // Lógica de filtragem combinada
+  const filteredRecords = useMemo(() => {
+    // Se não há termo, mostra tudo
+    if (!searchTerm.trim()) return records;
+
+    // Se IA está ativa e temos resultados (mesmo que vazio), usa os resultados da IA
+    if (useAI && aiMatches !== null) {
+      return records.filter(record => aiMatches.includes(record.id));
+    }
+
+    // Fallback: Busca padrão por texto
+    return records.filter(record => 
+      record.userData.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      record.userData.diagnosis.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [records, searchTerm, useAI, aiMatches]);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col transition-colors duration-300">
@@ -77,15 +150,31 @@ const Dashboard: React.FC<DashboardProps> = ({
             
             <div className="flex-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="text-slate-400" size={18} />
+                    <Search className={`transition-colors duration-300 ${useAI ? 'text-purple-500' : 'text-slate-400'}`} size={18} />
                 </div>
                 <input
                     type="text"
-                    placeholder="Buscar por nome ou diagnóstico..."
+                    placeholder={useAI ? "Busca inteligente ativa..." : "Buscar por nome ou diagnóstico..."}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 transition outline-none shadow-sm"
+                    className={`w-full pl-10 pr-12 py-3 rounded-xl border transition-all duration-300 outline-none shadow-sm 
+                        ${useAI 
+                            ? 'border-purple-300 ring-2 ring-purple-100 dark:ring-purple-900/30 bg-purple-50/50 dark:bg-slate-800' 
+                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500'
+                        } text-slate-800 dark:text-white`}
                 />
+                <button
+                    onClick={() => setUseAI(!useAI)}
+                    className={`absolute inset-y-0 right-0 px-3 flex items-center gap-2 transition-colors duration-300 rounded-r-xl
+                        ${useAI ? 'text-purple-600 bg-purple-100/50 dark:bg-purple-900/20' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                    title={useAI ? "Desativar Busca IA" : "Ativar Busca Semântica (IA)"}
+                >
+                    {aiLoading ? (
+                        <Loader2 size={18} className="animate-spin text-purple-600" />
+                    ) : (
+                        <Sparkles size={18} className={useAI ? "fill-purple-300" : ""} />
+                    )}
+                </button>
             </div>
         </div>
 
@@ -101,7 +190,11 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
             ) : filteredRecords.length === 0 ? (
                 <div className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <div className="bg-slate-50 dark:bg-slate-700 p-4 rounded-full mb-4 inline-flex">
+                        <Search size={24} className="text-slate-300 dark:text-slate-500" />
+                    </div>
                     <p>Nenhum registro encontrado para "{searchTerm}".</p>
+                    {useAI && <p className="text-xs text-purple-500 mt-2">A busca semântica não encontrou correspondências relevantes.</p>}
                 </div>
             ) : (
                 <div className="divide-y divide-slate-100 dark:divide-slate-700">
