@@ -26,6 +26,7 @@ export interface UserData {
   zip: string;
   neighborhood: string;
   diagnosis: string;
+  consultationReason: string;
   speechTherapist: string;
   observations: string;
 }
@@ -88,6 +89,7 @@ export const initialUserData: UserData = {
   zip: '',
   neighborhood: '',
   diagnosis: '',
+  consultationReason: '',
   speechTherapist: '',
   observations: ''
 };

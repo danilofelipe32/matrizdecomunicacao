@@ -27,7 +27,8 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
       email: 'E-mail',
       date: 'Data da Avaliação',
       time: 'Hora',
-      diagnosis: 'Laudo / Diagnóstico'
+      diagnosis: 'Laudo / Diagnóstico',
+      consultationReason: 'Motivo da Consulta'
     };
 
     // Encontrar o primeiro campo vazio
@@ -188,6 +189,16 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
             <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Laudo / Diagnóstico Clínico *</label>
                 <textarea rows={4} value={userData.diagnosis} onChange={(e) => onUpdate('diagnosis', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"></textarea>
+            </div>
+            <div>
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Motivo da Consulta *</label>
+                <textarea 
+                  rows={4} 
+                  value={userData.consultationReason} 
+                  onChange={(e) => onUpdate('consultationReason', e.target.value)} 
+                  placeholder="Descreva o motivo principal do encaminhamento ou da busca por avaliação..."
+                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                ></textarea>
             </div>
             <div>
                 <div className="flex justify-between items-center mb-1">

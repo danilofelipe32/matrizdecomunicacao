@@ -193,6 +193,15 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
                     </div>
                 </div>
             </div>
+            
+            <div className="col-span-1 md:col-span-2 lg:col-span-3 print:col-span-3 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-[100px_1fr] gap-2">
+                    <span className="text-slate-500 dark:text-slate-400 text-xs mt-1">Motivo:</span>
+                    <div className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-700 p-3 rounded border border-slate-100 dark:border-slate-600 italic leading-relaxed print:border-0 print:p-0 print:bg-transparent print:not-italic">
+                        {userData.consultationReason || 'Não informado.'}
+                    </div>
+                </div>
+            </div>
 
           </div>
         </div>
