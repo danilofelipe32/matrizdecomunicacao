@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChevronLeft, Stethoscope, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save } from 'lucide-react';
 import { UserData } from '../types';
 
 interface RegistrationProps {
@@ -9,9 +9,23 @@ interface RegistrationProps {
 }
 
 const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavigate }) => {
+  const [generatingField, setGeneratingField] = useState<string | null>(null);
   
+  // Estados para o Modal de Edição/Refinamento
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    field: keyof UserData | null;
+    label: string;
+    text: string;
+  }>({ isOpen: false, field: null, label: '', text: '' });
+
+  const [refinement, setRefinement] = useState({
+    showInput: false,
+    instruction: '',
+    loading: false
+  });
+
   const handleContinue = () => {
-    // Mapa de campos obrigatórios e seus rótulos amigáveis
     const requiredFields: Partial<Record<keyof UserData, string>> = {
       name: 'Nome Completo',
       age: 'Idade',
@@ -31,22 +45,135 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
       consultationReason: 'Motivo da Consulta'
     };
 
-    // Encontrar o primeiro campo vazio
     for (const [key, label] of Object.entries(requiredFields)) {
       const value = userData[key as keyof UserData];
       if (!value || value.trim() === '') {
         alert(`Por favor, preencha o campo: ${label}`);
-        return; // Interrompe a função e não navega
+        return;
       }
     }
-
-    // Se tudo estiver preenchido, segue para a próxima tela
-    // (O salvamento já ocorre automaticamente via onUpdate no App.tsx)
     onNavigate('triage');
   };
 
+  // Função Original de Geração (Botão "Gerar com IA")
+  const generateAiText = async (field: keyof UserData, label: string) => {
+    if (generatingField) return;
+
+    if (!userData.name || !userData.age) {
+      alert("Por favor, preencha pelo menos o Nome e a Idade da criança para dar contexto à IA.");
+      return;
+    }
+
+    setGeneratingField(field);
+
+    const contextPrompt = `
+      Atue como um fonoaudiólogo especialista realizando uma avaliação clínica.
+      
+      Gere ou melhore o texto técnico para o campo: "${label}".
+      
+      DADOS DO PACIENTE:
+      - Nome: ${userData.name}
+      - Idade: ${userData.age}
+      - Sexo: ${userData.gender === 'M' ? 'Masculino' : userData.gender === 'F' ? 'Feminino' : 'Não informado'}
+      - Responsáveis: ${userData.motherName} e ${userData.fatherName}
+      - Fonoaudiólogo: ${userData.speechTherapist}
+      
+      CONTEXTO JÁ ESCRITO NO CAMPO (Rascunho):
+      "${userData[field] || 'Nenhum texto inserido ainda. Crie uma sugestão baseada nos dados do paciente.'}"
+      
+      INSTRUÇÕES:
+      1. Se houver um rascunho, reescreva-o de forma técnica, corrigindo gramática e usando terminologia fonoaudiológica adequada.
+      2. Se estiver vazio, crie um texto padrão profissional condizente com o campo solicitado e os dados do paciente (hipotético mas plausível).
+      3. Seja direto e profissional. Retorne APENAS o texto sugerido para o campo, sem introduções.
+    `;
+
+    try {
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: contextPrompt })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'success') {
+        onUpdate(field, data.response.trim());
+      } else if (data.error && data.error.includes("Rate limit")) {
+        alert("Limite de requisições da IA atingido. Aguarde 5 segundos.");
+      } else {
+        alert("Erro ao gerar texto: " + (data.error || "Erro desconhecido"));
+      }
+    } catch (error) {
+      console.error("Erro na requisição IA:", error);
+      alert("Não foi possível conectar ao serviço de IA.");
+    } finally {
+      setGeneratingField(null);
+    }
+  };
+
+  // Abrir Modal de Edição
+  const openEditModal = (field: keyof UserData, label: string) => {
+    setEditModal({
+      isOpen: true,
+      field,
+      label,
+      text: userData[field] || ''
+    });
+    setRefinement({ showInput: false, instruction: '', loading: false });
+  };
+
+  // Função "Assim, mas..." (Refinamento)
+  const handleRefineText = async () => {
+    if (!refinement.instruction.trim()) return;
+    
+    setRefinement(prev => ({ ...prev, loading: true }));
+
+    const contextPrompt = `
+      Atue como um fonoaudiólogo especialista.
+      
+      TAREFA: Reescreva o texto abaixo aplicando a seguinte instrução de alteração:
+      "${refinement.instruction}"
+      
+      TEXTO ATUAL:
+      "${editModal.text}"
+      
+      DADOS DO PACIENTE (Para contexto):
+      - Nome: ${userData.name}, Idade: ${userData.age}
+      
+      Retorne APENAS o novo texto reescrito, mantendo tom clínico.
+    `;
+
+    try {
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: contextPrompt })
+      });
+
+      const data = await response.json();
+
+      if (data.status === 'success') {
+        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+        setRefinement({ showInput: false, instruction: '', loading: false });
+      } else {
+        alert("Erro na IA: " + (data.error || "Erro desconhecido"));
+        setRefinement(prev => ({ ...prev, loading: false }));
+      }
+    } catch (error) {
+      alert("Erro de conexão.");
+      setRefinement(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const saveModalChanges = () => {
+    if (editModal.field) {
+      onUpdate(editModal.field, editModal.text);
+    }
+    setEditModal({ isOpen: false, field: null, label: '', text: '' });
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-white fade-in transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-white fade-in transition-colors duration-300 relative">
       <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex justify-between items-center">
           <button
@@ -59,10 +186,13 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
           <div className="w-20"></div>
         </div>
       </header>
+
       <main className="max-w-4xl mx-auto p-6 md:p-8">
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 md:p-10">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">Ficha de Identificação</h2>
+          
           <div className="space-y-6">
+            {/* Campos Pessoais Básicos */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-8">
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome Completo *</label>
@@ -135,7 +265,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-8">
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Rua *</label>
                 <input
@@ -186,36 +316,53 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                     <input type="time" value={userData.time} onChange={(e) => onUpdate('time', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
             </div>
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Laudo / Diagnóstico Clínico *</label>
-                <textarea rows={4} value={userData.diagnosis} onChange={(e) => onUpdate('diagnosis', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"></textarea>
-            </div>
-            <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Motivo da Consulta *</label>
-                <textarea 
-                  rows={4} 
-                  value={userData.consultationReason} 
-                  onChange={(e) => onUpdate('consultationReason', e.target.value)} 
-                  placeholder="Descreva o motivo principal do encaminhamento ou da busca por avaliação..."
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
-                ></textarea>
-            </div>
-            <div>
-                <div className="flex justify-between items-center mb-1">
-                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Observações Gerais <span className="text-slate-400 font-normal">(Opcional)</span></label>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                        {(userData.observations || '').length}/500
-                    </span>
+
+            {/* Campos de Texto Longo com IA e Edição */}
+            {[
+              { field: 'diagnosis' as const, label: 'Laudo / Diagnóstico Clínico', required: true },
+              { field: 'consultationReason' as const, label: 'Motivo da Consulta', required: true, placeholder: "Descreva o motivo principal..." },
+              { field: 'observations' as const, label: 'Observações Gerais', required: false, placeholder: "Notas adicionais..." }
+            ].map((item) => (
+              <div key={item.field}>
+                <div className="flex flex-wrap justify-between items-center mb-1 gap-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    {item.label} {item.required && '*'} {!item.required && <span className="text-slate-400 font-normal">(Opcional)</span>}
+                  </label>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => openEditModal(item.field, item.label)}
+                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-full transition-all"
+                      title="Editar texto manualmente"
+                    >
+                      <Edit size={14} /> Editar
+                    </button>
+                    <button 
+                      onClick={() => generateAiText(item.field, item.label)}
+                      disabled={generatingField !== null}
+                      className="flex items-center gap-1.5 text-xs font-bold text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/40 px-3 py-1.5 rounded-full transition-all disabled:opacity-50"
+                      title="Usar IA para gerar ou melhorar o texto"
+                    >
+                      {generatingField === item.field ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      {generatingField === item.field ? 'Gerando...' : 'Gerar com IA'}
+                    </button>
+                  </div>
                 </div>
                 <textarea 
-                    rows={4} 
-                    maxLength={500}
-                    value={userData.observations || ''} 
-                    onChange={(e) => onUpdate('observations', e.target.value)} 
-                    placeholder="Insira notas adicionais sobre a criança ou a avaliação..."
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  rows={4} 
+                  maxLength={item.field === 'observations' ? 500 : undefined}
+                  value={userData[item.field] || ''} 
+                  onChange={(e) => onUpdate(item.field, e.target.value)} 
+                  placeholder={item.placeholder || ''}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 ></textarea>
-            </div>
+                {item.field === 'observations' && (
+                  <div className="text-right mt-1">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{(userData.observations || '').length}/500</span>
+                  </div>
+                )}
+              </div>
+            ))}
+
           </div>
           <div className="mt-8 flex justify-end">
             <button
@@ -227,6 +374,84 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
           </div>
         </div>
       </main>
+
+      {/* Modal de Edição */}
+      {editModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
+              <div>
+                 <h3 className="text-xl font-bold text-slate-800 dark:text-white">Editar Texto</h3>
+                 <p className="text-sm text-slate-500 dark:text-slate-400">{editModal.label}</p>
+              </div>
+              <button onClick={() => setEditModal({ ...editModal, isOpen: false })} className="text-slate-400 hover:text-red-500 transition">
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 flex-1 overflow-y-auto">
+              <textarea
+                value={editModal.text}
+                onChange={(e) => setEditModal(prev => ({ ...prev, text: e.target.value }))}
+                className="w-full h-64 p-4 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 resize-none text-base leading-relaxed"
+                placeholder="Digite ou edite o texto aqui..."
+              ></textarea>
+              
+              {/* Área "Assim, mas..." */}
+              <div className="mt-4">
+                 {!refinement.showInput ? (
+                    <button 
+                       onClick={() => setRefinement({ ...refinement, showInput: true })}
+                       className="text-purple-600 dark:text-purple-400 font-bold text-sm flex items-center gap-2 hover:underline"
+                    >
+                       <Sparkles size={16} /> Assim, mas... (Refinar com IA)
+                    </button>
+                 ) : (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 animate-in fade-in slide-in-from-top-2">
+                       <label className="block text-xs font-bold text-purple-800 dark:text-purple-300 mb-2">O que você gostaria de mudar neste texto?</label>
+                       <div className="flex gap-2">
+                          <input 
+                             type="text" 
+                             value={refinement.instruction}
+                             onChange={(e) => setRefinement(prev => ({ ...prev, instruction: e.target.value }))}
+                             placeholder="Ex: Resuma, torne mais formal, adicione que a criança estava agitada..."
+                             className="flex-1 px-4 py-2 rounded-lg border border-purple-200 dark:border-purple-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500 text-sm"
+                             onKeyDown={(e) => e.key === 'Enter' && handleRefineText()}
+                          />
+                          <button 
+                             onClick={handleRefineText}
+                             disabled={refinement.loading || !refinement.instruction.trim()}
+                             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition disabled:opacity-50 flex items-center gap-2"
+                          >
+                             {refinement.loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                          </button>
+                       </div>
+                    </div>
+                 )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-b-2xl">
+              <button 
+                onClick={() => setEditModal({ ...editModal, isOpen: false })}
+                className="px-6 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={saveModalChanges}
+                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-600/20 transition flex items-center gap-2"
+              >
+                <Save size={18} /> Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
