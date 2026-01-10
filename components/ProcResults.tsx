@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState } from 'react';
-import { Printer, Edit, ArrowLeft, FileText, CheckCircle2, Sparkles, Loader2, Save, Send, X } from 'lucide-react';
+import { Printer, Edit, ArrowLeft, FileText, CheckCircle2, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { UserData, ProcAnswers, ProcChecklist } from '../types';
 import { procChecklistSections } from '../proc_constants';
 import { AI_CONTEXT_PROC } from '../constants';
@@ -189,6 +188,9 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
           <div className="flex gap-3 flex-wrap justify-center">
             <button onClick={() => window.print()} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded shadow transition flex gap-2 items-center font-medium">
               <Printer size={18} /> Imprimir
+            </button>
+            <button onClick={() => window.print()} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow transition flex gap-2 items-center font-medium">
+              <Share2 size={18} /> Compartilhar PDF
             </button>
             <button onClick={onEdit} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded transition flex gap-2 items-center text-sm">
               <Edit size={16} /> Editar Respostas

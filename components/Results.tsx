@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X } from 'lucide-react';
+import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
 import { AnswerData, UserData } from '../types';
 
@@ -210,7 +210,13 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
               onClick={() => window.print()}
               className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded shadow-lg transition flex gap-2 items-center font-medium"
             >
-              <Printer size={18} /> Imprimir Relatório
+              <Printer size={18} /> Imprimir
+            </button>
+            <button
+               onClick={() => window.print()}
+               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded shadow-lg transition flex gap-2 items-center font-medium"
+            >
+               <Share2 size={18} /> Compartilhar PDF
             </button>
             <div className="h-8 w-px bg-blue-800 dark:bg-slate-600 mx-1 hidden md:block"></div>
             <button
