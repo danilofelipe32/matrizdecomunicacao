@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save } from 'lucide-react';
+import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save, AlertCircle } from 'lucide-react';
 import { UserData } from '../types';
 
 interface RegistrationProps {
@@ -10,6 +10,7 @@ interface RegistrationProps {
 
 const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavigate }) => {
   const [generatingField, setGeneratingField] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<keyof UserData, string>>>({});
   
   // Estados para o Modal de Edição/Refinamento
   const [editModal, setEditModal] = useState<{
@@ -25,7 +26,8 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     loading: false
   });
 
-  const handleContinue = () => {
+  const validateAndContinue = () => {
+    const newErrors: Partial<Record<keyof UserData, string>> = {};
     const requiredFields: Partial<Record<keyof UserData, string>> = {
       name: 'Nome Completo',
       age: 'Idade',
@@ -45,15 +47,52 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
       consultationReason: 'Motivo da Consulta'
     };
 
+    let hasError = false;
     for (const [key, label] of Object.entries(requiredFields)) {
-      const value = userData[key as keyof UserData];
-      if (!value || value.trim() === '') {
-        alert(`Por favor, preencha o campo: ${label}`);
-        return;
+      const k = key as keyof UserData;
+      if (!userData[k] || userData[k].trim() === '') {
+        newErrors[k] = `O campo ${label} é obrigatório.`;
+        hasError = true;
       }
     }
+
+    setErrors(newErrors);
+
+    if (hasError) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+    }
+
     onNavigate('triage');
   };
+
+  const handleInputChange = (field: keyof UserData, value: string) => {
+    onUpdate(field, value);
+    // Limpa o erro do campo se o usuário começar a digitar
+    if (errors[field]) {
+        setErrors(prev => {
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+    }
+  };
+
+  // Helper para classes de input com erro
+  const getInputClass = (field: keyof UserData, paddingLeft = false) => `
+    w-full ${paddingLeft ? 'pl-10' : ''} px-4 py-2 rounded-lg border transition outline-none
+    ${errors[field] 
+        ? 'border-red-500 focus:ring-2 focus:ring-red-500 bg-red-50 dark:bg-red-900/20' 
+        : 'border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500'}
+  `;
+
+  const ErrorMessage = ({ field }: { field: keyof UserData }) => (
+      errors[field] ? (
+          <p className="text-red-500 dark:text-red-400 text-xs mt-1 flex items-center gap-1 font-medium animate-pulse">
+              <AlertCircle size={12} /> {errors[field]}
+          </p>
+      ) : null
+  );
 
   // Função Original de Geração (Botão "Gerar com IA")
   const generateAiText = async (field: keyof UserData, label: string) => {
@@ -97,7 +136,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
       const data = await response.json();
 
       if (data.status === 'success') {
-        onUpdate(field, data.response.trim());
+        handleInputChange(field, data.response.trim()); // Usa handleInput para limpar erros se houver
       } else if (data.error && data.error.includes("Rate limit")) {
         alert("Limite de requisições da IA atingido. Aguarde 5 segundos.");
       } else {
@@ -167,7 +206,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
 
   const saveModalChanges = () => {
     if (editModal.field) {
-      onUpdate(editModal.field, editModal.text);
+      handleInputChange(editModal.field, editModal.text);
     }
     setEditModal({ isOpen: false, field: null, label: '', text: '' });
   };
@@ -191,6 +230,16 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 md:p-10">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">Ficha de Identificação</h2>
           
+          {Object.keys(errors).length > 0 && (
+             <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 p-4 rounded-lg flex items-start gap-2">
+                <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
+                <div>
+                    <p className="font-bold text-sm">Existem campos obrigatórios não preenchidos.</p>
+                    <p className="text-xs opacity-90">Verifique os campos destacados em vermelho abaixo.</p>
+                </div>
+             </div>
+          )}
+
           <div className="space-y-6">
             {/* Campos Pessoais Básicos */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -199,49 +248,53 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.name}
-                  onChange={(e) => onUpdate('name', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  className={getInputClass('name')}
                   placeholder="Nome da criança"
                 />
+                <ErrorMessage field="name" />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Idade *</label>
                 <input
                   type="text"
                   value={userData.age}
-                  onChange={(e) => onUpdate('age', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('age', e.target.value)}
+                  className={getInputClass('age')}
                   placeholder="Anos/Meses"
                 />
+                <ErrorMessage field="age" />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Sexo *</label>
                 <select
                   value={userData.gender}
-                  onChange={(e) => onUpdate('gender', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('gender', e.target.value)}
+                  className={getInputClass('gender')}
                 >
                   <option value="">Selecione</option>
                   <option value="M">Masculino</option>
                   <option value="F">Feminino</option>
                 </select>
+                <ErrorMessage field="gender" />
               </div>
             </div>
 
-            <div className="bg-blue-50 dark:bg-slate-700 p-4 rounded-lg border border-blue-100 dark:border-slate-600">
-              <label className="block text-sm font-bold text-blue-800 dark:text-blue-200 mb-1">Fonoaudiólogo (a) Responsável *</label>
+            <div className={`p-4 rounded-lg border transition ${errors.speechTherapist ? 'bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-800' : 'bg-blue-50 border-blue-100 dark:bg-slate-700 dark:border-slate-600'}`}>
+              <label className={`block text-sm font-bold mb-1 ${errors.speechTherapist ? 'text-red-700 dark:text-red-300' : 'text-blue-800 dark:text-blue-200'}`}>Fonoaudiólogo (a) Responsável *</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Stethoscope className="text-blue-400 dark:text-blue-300" size={16} />
+                  <Stethoscope className={`${errors.speechTherapist ? 'text-red-400' : 'text-blue-400 dark:text-blue-300'}`} size={16} />
                 </div>
                 <input
                   type="text"
                   value={userData.speechTherapist}
-                  onChange={(e) => onUpdate('speechTherapist', e.target.value)}
-                  className="pl-10 w-full px-4 py-2 rounded-md border border-blue-200 dark:border-slate-500 dark:bg-slate-600 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('speechTherapist', e.target.value)}
+                  className={getInputClass('speechTherapist', true).replace('border-slate-300', 'border-blue-200 dark:border-slate-500 dark:bg-slate-600')} // Custom style override for the "special" input look if needed, but getInputClass handles base logic
                   placeholder="Nome do profissional"
                 />
               </div>
+              <ErrorMessage field="speechTherapist" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -250,18 +303,20 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.motherName}
-                  onChange={(e) => onUpdate('motherName', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('motherName', e.target.value)}
+                  className={getInputClass('motherName')}
                 />
+                <ErrorMessage field="motherName" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome do Pai *</label>
                 <input
                   type="text"
                   value={userData.fatherName}
-                  onChange={(e) => onUpdate('fatherName', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('fatherName', e.target.value)}
+                  className={getInputClass('fatherName')}
                 />
+                <ErrorMessage field="fatherName" />
               </div>
             </div>
 
@@ -271,49 +326,57 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.street}
-                  onChange={(e) => onUpdate('street', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('street', e.target.value)}
+                  className={getInputClass('street')}
                 />
+                <ErrorMessage field="street" />
               </div>
               <div className="md:col-span-4">
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Número *</label>
                 <input
                   type="text"
                   value={userData.number}
-                  onChange={(e) => onUpdate('number', e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  onChange={(e) => handleInputChange('number', e.target.value)}
+                  className={getInputClass('number')}
                 />
+                <ErrorMessage field="number" />
               </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Bairro *</label>
-                    <input type="text" value={userData.neighborhood} onChange={(e) => onUpdate('neighborhood', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.neighborhood} onChange={(e) => handleInputChange('neighborhood', e.target.value)} className={getInputClass('neighborhood')} />
+                    <ErrorMessage field="neighborhood" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">CEP *</label>
-                    <input type="text" value={userData.zip} onChange={(e) => onUpdate('zip', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.zip} onChange={(e) => handleInputChange('zip', e.target.value)} className={getInputClass('zip')} />
+                    <ErrorMessage field="zip" />
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Telefone *</label>
-                    <input type="text" value={userData.phone} onChange={(e) => onUpdate('phone', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className={getInputClass('phone')} />
+                    <ErrorMessage field="phone" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">E-mail *</label>
-                    <input type="email" value={userData.email} onChange={(e) => onUpdate('email', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="email" value={userData.email} onChange={(e) => handleInputChange('email', e.target.value)} className={getInputClass('email')} />
+                    <ErrorMessage field="email" />
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Data da Avaliação *</label>
-                    <input type="date" value={userData.date} onChange={(e) => onUpdate('date', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="date" value={userData.date} onChange={(e) => handleInputChange('date', e.target.value)} className={getInputClass('date')} />
+                    <ErrorMessage field="date" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Hora *</label>
-                    <input type="time" value={userData.time} onChange={(e) => onUpdate('time', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="time" value={userData.time} onChange={(e) => handleInputChange('time', e.target.value)} className={getInputClass('time')} />
+                    <ErrorMessage field="time" />
                 </div>
             </div>
 
@@ -325,7 +388,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
             ].map((item) => (
               <div key={item.field}>
                 <div className="flex flex-wrap justify-between items-center mb-1 gap-2">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  <label className={`block text-sm font-semibold ${errors[item.field] ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
                     {item.label} {item.required && '*'} {!item.required && <span className="text-slate-400 font-normal">(Opcional)</span>}
                   </label>
                   <div className="flex gap-2">
@@ -351,10 +414,11 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                   rows={4} 
                   maxLength={item.field === 'observations' ? 500 : undefined}
                   value={userData[item.field] || ''} 
-                  onChange={(e) => onUpdate(item.field, e.target.value)} 
+                  onChange={(e) => handleInputChange(item.field, e.target.value)} 
                   placeholder={item.placeholder || ''}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
+                  className={getInputClass(item.field)}
                 ></textarea>
+                <ErrorMessage field={item.field} />
                 {item.field === 'observations' && (
                   <div className="text-right mt-1">
                     <span className="text-xs text-slate-500 dark:text-slate-400">{(userData.observations || '').length}/500</span>
@@ -366,8 +430,8 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
           </div>
           <div className="mt-8 flex justify-end">
             <button
-              onClick={handleContinue}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
+              onClick={validateAndContinue}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2 transform active:scale-95"
             >
               Continuar para Triagem <ChevronRight />
             </button>
