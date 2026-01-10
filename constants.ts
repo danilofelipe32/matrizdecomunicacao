@@ -1,4 +1,45 @@
+
 import { Question, MatrixRow } from './types';
+
+// --- CONTEXTO DE TREINAMENTO DA IA (Baseado nos PDFs fornecidos) ---
+
+export const AI_CONTEXT_MATRIX = `
+CONHECIMENTO TEÓRICO (MATRIZ DE COMUNICAÇÃO - Charity Rowland):
+1. OBJETIVO: Avaliar habilidades comunicativas em pessoas com deficiências, desde estadios iniciais até linguagem.
+2. 4 RAZÕES PARA COMUNICAR (Intenções):
+   - REJEITAR: Expressar desconforto, protestar, rejeitar algo.
+   - OBTER: Obter conforto, continuar ação, obter objeto, escolher.
+   - SOCIAL: Interesse, chamar atenção, cumprimentar, afeto.
+   - INFORMAÇÃO: Responder, perguntar, nomear, comentar.
+3. 7 NÍVEIS DE COMPETÊNCIA:
+   - Nível I (Pré-intencional): Reage a sensações, sem controle intencional. Pais interpretam.
+   - Nível II (Intencional): Comportamento intencional, mas não comunicativo (ex: chora para si mesmo, não para o outro).
+   - Nível III (Comunicação Não-Convencional): Gritos, gestos simples, puxar pessoas. Intencional pré-simbólico.
+   - Nível IV (Comunicação Convencional): Apontar, acenar, gestos socialmente aceitos. Pré-simbólico.
+   - Nível V (Símbolos Concretos): Objetos reais, fotos, gestos icônicos (ex: bater na cadeira para sentar).
+   - Nível VI (Símbolos Abstratos): Fala isolada, sinais (Libras), Braille, palavras escritas. Um a um.
+   - Nível VII (Linguagem): Combinação de 2 ou mais símbolos com regras gramaticais.
+4. INTERPRETAÇÃO:
+   - Emergente: Faz inconsistentemente ou com ajuda.
+   - Dominado: Faz independentemente em vários contextos.
+`;
+
+export const AI_CONTEXT_PROC = `
+CONHECIMENTO TEÓRICO (PROC - Jaime Zorzi e Simone Hage, 2004):
+1. ESTRUTURA: Avalia desenvolvimento comunicativo e cognitivo infantil. Pontuação Máxima Total: 200.
+2. ASPECTOS OBSERVADOS:
+   A. HABILIDADES COMUNICATIVAS (Máx 70):
+      - Dialógicas: Intenção, iniciação, troca de turnos.
+      - Funções Comunicativas: Instrumental, Protesto, Interativa, Nomeação, Informativa, Heurística, Narrativa.
+      - Meios: Não verbais (gestos/vocalizações) e Verbais (palavras a frases).
+      - Contextualização: Linguagem imediata vs. não imediata (eventos passados/futuros).
+   B. COMPREENSÃO VERBAL (Máx 60): De não resposta até ordens complexas (3+ ações).
+   C. DESENVOLVIMENTO COGNITIVO (Máx 70):
+      - Manipulação de objetos.
+      - Simbolismo (faz-de-conta).
+      - Organização do brinquedo.
+      - Imitação (gestual e sonora).
+`;
 
 export const sectionDescriptions: Record<string, { title: string; description: string }> = {
   'A': {

@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
-import { BarChart2, Printer, Edit, PieChart, ArrowLeft } from 'lucide-react';
-import { matrixRows } from '../constants';
+import React, { useMemo, useState } from 'react';
+import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X } from 'lucide-react';
+import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
 import { AnswerData, UserData } from '../types';
 
 interface ResultsProps {
@@ -10,6 +10,22 @@ interface ResultsProps {
 }
 
 const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
+  // Estado da Análise IA
+  const [analysisText, setAnalysisText] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Estado do Modal de Edição
+  const [editModal, setEditModal] = useState<{
+    isOpen: boolean;
+    text: string;
+  }>({ isOpen: false, text: '' });
+
+  const [refinement, setRefinement] = useState({
+    showInput: false,
+    instruction: '',
+    loading: false
+  });
+
   const stats = useMemo(() => {
     // Totais por Categoria
     const categories: Record<string, { total: number; master: number }> = {
@@ -67,6 +83,114 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
 
     return { categories, levels, mean, stdDev, median, totalItems: scores.length, totalMastered: sum };
   }, [answers]);
+
+  const generateAnalysis = async () => {
+    setIsGenerating(true);
+    
+    // Preparar resumo dos dados para o prompt
+    const dataSummary = `
+      NOME: ${userData.name}, IDADE: ${userData.age}, DIAG: ${userData.diagnosis}
+      ESTATÍSTICAS DA MATRIZ:
+      - Total Dominado: ${stats.totalMastered} de ${stats.totalItems}
+      - DOMÍNIO POR NÍVEL:
+        N1: ${stats.levels[1].master}/${stats.levels[1].total}
+        N2: ${stats.levels[2].master}/${stats.levels[2].total}
+        N3: ${stats.levels[3].master}/${stats.levels[3].total}
+        N4: ${stats.levels[4].master}/${stats.levels[4].total}
+        N5: ${stats.levels[5].master}/${stats.levels[5].total}
+        N6: ${stats.levels[6].master}/${stats.levels[6].total}
+        N7: ${stats.levels[7].master}/${stats.levels[7].total}
+      - DOMÍNIO POR INTENÇÃO:
+        REJEITAR: ${stats.categories['REJEITAR'].master}/${stats.categories['REJEITAR'].total}
+        OBTER: ${stats.categories['OBTER'].master}/${stats.categories['OBTER'].total}
+        SOCIAL: ${stats.categories['SOCIAL'].master}/${stats.categories['SOCIAL'].total}
+        INFO: ${stats.categories['INFO'].master}/${stats.categories['INFO'].total}
+    `;
+
+    const prompt = `
+      ${AI_CONTEXT_MATRIX}
+      
+      ATUE COMO: Um Fonoaudiólogo Doutor, especialista em comunicação alternativa.
+      
+      TAREFA: Analise os dados abaixo da Matriz de Comunicação e escreva um PARECER CLÍNICO PROFISSIONAL E CONCLUSIVO.
+      
+      DADOS DO PACIENTE:
+      ${dataSummary}
+      
+      DIRETRIZES:
+      1. Seja formal, empático e técnico.
+      2. Analise qual o nível predominante de comunicação da criança.
+      3. Identifique pontos fortes (intenções mais usadas) e áreas de necessidade.
+      4. Sugira brevemente o foco terapêutico (ex: expandir para nível X ou aumentar funções Y).
+      5. Não use introduções genéricas ("Aqui está a análise"). Comece direto: "A avaliação de [Nome] indica..."
+    `;
+
+    try {
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt })
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        setAnalysisText(data.response.trim());
+      } else {
+        alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
+      }
+    } catch (error) {
+      alert("Erro de conexão com o serviço de IA.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleRefineText = async () => {
+    if (!refinement.instruction.trim()) return;
+    setRefinement(prev => ({ ...prev, loading: true }));
+
+    const prompt = `
+      ATUE COMO: Fonoaudiólogo Doutor.
+      CONTEXTO: Você gerou um parecer clínico da Matriz de Comunicação.
+      
+      TEXTO ATUAL:
+      "${editModal.text}"
+      
+      INSTRUÇÃO DE ALTERAÇÃO:
+      "${refinement.instruction}"
+      
+      TAREFA: Reescreva o texto aplicando a alteração solicitada, mantendo o tom profissional.
+    `;
+
+    try {
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt })
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
+        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+        setRefinement({ showInput: false, instruction: '', loading: false });
+      } else {
+        alert("Erro ao refinar: " + data.error);
+      }
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setRefinement(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const openEditModal = () => {
+    setEditModal({ isOpen: true, text: analysisText });
+    setRefinement({ showInput: false, instruction: '', loading: false });
+  };
+
+  const saveAnalysis = () => {
+    setAnalysisText(editModal.text);
+    setEditModal({ isOpen: false, text: '' });
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col font-sans fade-in transition-colors duration-300">
@@ -339,11 +463,118 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
           </div>
         </div>
 
+        {/* NOVA SEÇÃO: Análise Clínica com IA */}
+        <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8 break-inside-avoid">
+            <div className="flex justify-between items-center mb-4">
+               <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                  <Sparkles className="text-purple-600 dark:text-purple-400" />
+                  Parecer Clínico (IA)
+               </h2>
+               {!analysisText && (
+                  <button 
+                     onClick={generateAnalysis}
+                     disabled={isGenerating}
+                     className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition disabled:opacity-50"
+                  >
+                     {isGenerating ? <Loader2 className="animate-spin" size={16} /> : <Sparkles size={16} />}
+                     {isGenerating ? 'Analisando...' : 'Gerar Análise'}
+                  </button>
+               )}
+               {analysisText && (
+                  <button 
+                     onClick={openEditModal}
+                     className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm font-medium flex items-center gap-1 print:hidden"
+                  >
+                     <Edit size={16} /> Editar
+                  </button>
+               )}
+            </div>
+
+            {analysisText ? (
+                <div className="bg-purple-50 dark:bg-purple-900/20 p-6 rounded-lg border border-purple-100 dark:border-purple-800 text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap text-sm md:text-base print:border print:border-slate-300 print:bg-transparent print:text-black">
+                    {analysisText}
+                </div>
+            ) : (
+                <div className="text-center py-8 text-slate-400 dark:text-slate-500 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-lg">
+                    Clique em "Gerar Análise" para obter um parecer profissional baseado nos dados da Matriz.
+                </div>
+            )}
+        </div>
+
         {/* Footer for Print */}
         <div className="hidden print:block text-center text-xs text-slate-400 mt-8 border-t pt-4">
             <p>Gerado por Matriz de Comunicação - Protocolo Digital</p>
         </div>
       </main>
+
+      {/* Modal de Edição (Copiado/Adaptado de Registration.tsx) */}
+      {editModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm fade-in print:hidden">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-700">
+              <div>
+                 <h3 className="text-xl font-bold text-slate-800 dark:text-white">Editar Parecer Clínico</h3>
+                 <p className="text-sm text-slate-500 dark:text-slate-400">Refine o texto gerado pela IA</p>
+              </div>
+              <button onClick={() => setEditModal({ ...editModal, isOpen: false })} className="text-slate-400 hover:text-red-500 transition">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="p-6 flex-1 overflow-y-auto">
+              <textarea
+                value={editModal.text}
+                onChange={(e) => setEditModal(prev => ({ ...prev, text: e.target.value }))}
+                className="w-full h-64 p-4 rounded-xl border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 resize-none text-base leading-relaxed"
+              ></textarea>
+              <div className="mt-4">
+                 {!refinement.showInput ? (
+                    <button 
+                       onClick={() => setRefinement({ ...refinement, showInput: true })}
+                       className="text-purple-600 dark:text-purple-400 font-bold text-sm flex items-center gap-2 hover:underline"
+                    >
+                       <Sparkles size={16} /> Assim, mas... (Refinar com IA)
+                    </button>
+                 ) : (
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 animate-in fade-in slide-in-from-top-2">
+                       <label className="block text-xs font-bold text-purple-800 dark:text-purple-300 mb-2">O que você gostaria de mudar?</label>
+                       <div className="flex gap-2">
+                          <input 
+                             type="text" 
+                             value={refinement.instruction}
+                             onChange={(e) => setRefinement(prev => ({ ...prev, instruction: e.target.value }))}
+                             placeholder="Ex: Seja mais sucinto, foque na intenção comunicativa..."
+                             className="flex-1 px-4 py-2 rounded-lg border border-purple-200 dark:border-purple-700 dark:bg-slate-800 dark:text-white focus:ring-2 focus:ring-purple-500 text-sm"
+                             onKeyDown={(e) => e.key === 'Enter' && handleRefineText()}
+                          />
+                          <button 
+                             onClick={handleRefineText}
+                             disabled={refinement.loading || !refinement.instruction.trim()}
+                             className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold shadow-sm transition disabled:opacity-50 flex items-center gap-2"
+                          >
+                             {refinement.loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                          </button>
+                       </div>
+                    </div>
+                 )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-slate-200 dark:border-slate-700 flex justify-end gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-b-2xl">
+              <button 
+                onClick={() => setEditModal({ ...editModal, isOpen: false })}
+                className="px-6 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={saveAnalysis}
+                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-600/20 transition flex items-center gap-2"
+              >
+                <Save size={18} /> Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
