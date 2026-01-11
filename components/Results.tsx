@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
 import { AnswerData, UserData } from '../types';
 
@@ -133,21 +134,21 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
       });
 
-      const data = await response.json();
-      if (data.status === 'success') {
-        const text = data.response.trim();
+      if (response.text) {
+        const text = response.text.trim();
         setAnalysisText(text);
         onSaveAnalysis(text); // Salva automaticamente
       } else {
-        alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
+        alert("Erro ao gerar análise: Resposta vazia.");
       }
     } catch (error) {
+      console.error(error);
       alert("Erro de conexão com o serviço de IA.");
     } finally {
       setIsGenerating(false);
@@ -172,19 +173,20 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
       });
-      const data = await response.json();
-      if (data.status === 'success') {
-        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+
+      if (response.text) {
+        setEditModal(prev => ({ ...prev, text: response.text.trim() }));
         setRefinement({ showInput: false, instruction: '', loading: false });
       } else {
-        alert("Erro ao refinar: " + data.error);
+        alert("Erro ao refinar: Resposta vazia.");
       }
-    } catch {
+    } catch (error) {
+      console.error(error);
       alert("Erro de conexão.");
     } finally {
       setRefinement(prev => ({ ...prev, loading: false }));

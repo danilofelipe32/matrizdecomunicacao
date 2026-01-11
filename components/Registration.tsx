@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save, Check } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 import { UserData } from '../types';
 
 interface RegistrationProps {
@@ -10,6 +11,8 @@ interface RegistrationProps {
 
 const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavigate }) => {
   const [generatingField, setGeneratingField] = useState<string | null>(null);
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Estados para o Modal de Edição/Refinamento
   const [editModal, setEditModal] = useState<{
@@ -24,6 +27,22 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     instruction: '',
     loading: false
   });
+
+  const triggerSaveFeedback = () => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    
+    // Mostra o toast após um breve delay (debounce) para indicar que parou de digitar e salvou
+    saveTimeoutRef.current = setTimeout(() => {
+        setShowSaveToast(true);
+        // Esconde após 2.5 segundos
+        setTimeout(() => setShowSaveToast(false), 2500);
+    }, 800);
+  };
+
+  const handleInputChange = (field: keyof UserData, value: string) => {
+    onUpdate(field, value);
+    triggerSaveFeedback();
+  };
 
   const handleContinue = () => {
     const requiredFields: Partial<Record<keyof UserData, string>> = {
@@ -88,20 +107,16 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: contextPrompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: contextPrompt,
       });
 
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        onUpdate(field, data.response.trim());
-      } else if (data.error && data.error.includes("Rate limit")) {
-        alert("Limite de requisições da IA atingido. Aguarde 5 segundos.");
+      if (response.text) {
+        handleInputChange(field, response.text.trim());
       } else {
-        alert("Erro ao gerar texto: " + (data.error || "Erro desconhecido"));
+        alert("Erro ao gerar texto: Resposta vazia.");
       }
     } catch (error) {
       console.error("Erro na requisição IA:", error);
@@ -144,19 +159,17 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: contextPrompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: contextPrompt,
       });
 
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+      if (response.text) {
+        setEditModal(prev => ({ ...prev, text: response.text.trim() }));
         setRefinement({ showInput: false, instruction: '', loading: false });
       } else {
-        alert("Erro na IA: " + (data.error || "Erro desconhecido"));
+        alert("Erro na IA: Resposta vazia.");
         setRefinement(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {
@@ -167,7 +180,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
 
   const saveModalChanges = () => {
     if (editModal.field) {
-      onUpdate(editModal.field, editModal.text);
+      handleInputChange(editModal.field, editModal.text);
     }
     setEditModal({ isOpen: false, field: null, label: '', text: '' });
   };
@@ -199,7 +212,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.name}
-                  onChange={(e) => onUpdate('name', e.target.value)}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                   placeholder="Nome da criança"
                 />
@@ -209,7 +222,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.age}
-                  onChange={(e) => onUpdate('age', e.target.value)}
+                  onChange={(e) => handleInputChange('age', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                   placeholder="Anos/Meses"
                 />
@@ -218,7 +231,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Sexo *</label>
                 <select
                   value={userData.gender}
-                  onChange={(e) => onUpdate('gender', e.target.value)}
+                  onChange={(e) => handleInputChange('gender', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 >
                   <option value="">Selecione</option>
@@ -237,7 +250,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.speechTherapist}
-                  onChange={(e) => onUpdate('speechTherapist', e.target.value)}
+                  onChange={(e) => handleInputChange('speechTherapist', e.target.value)}
                   className="pl-10 w-full px-4 py-2 rounded-md border border-blue-200 dark:border-slate-500 dark:bg-slate-600 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                   placeholder="Nome do profissional"
                 />
@@ -250,7 +263,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.motherName}
-                  onChange={(e) => onUpdate('motherName', e.target.value)}
+                  onChange={(e) => handleInputChange('motherName', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 />
               </div>
@@ -259,7 +272,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.fatherName}
-                  onChange={(e) => onUpdate('fatherName', e.target.value)}
+                  onChange={(e) => handleInputChange('fatherName', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 />
               </div>
@@ -271,7 +284,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.street}
-                  onChange={(e) => onUpdate('street', e.target.value)}
+                  onChange={(e) => handleInputChange('street', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 />
               </div>
@@ -280,7 +293,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                 <input
                   type="text"
                   value={userData.number}
-                  onChange={(e) => onUpdate('number', e.target.value)}
+                  onChange={(e) => handleInputChange('number', e.target.value)}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 />
               </div>
@@ -289,31 +302,31 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Bairro *</label>
-                    <input type="text" value={userData.neighborhood} onChange={(e) => onUpdate('neighborhood', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.neighborhood} onChange={(e) => handleInputChange('neighborhood', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">CEP *</label>
-                    <input type="text" value={userData.zip} onChange={(e) => onUpdate('zip', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.zip} onChange={(e) => handleInputChange('zip', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Telefone *</label>
-                    <input type="text" value={userData.phone} onChange={(e) => onUpdate('phone', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="text" value={userData.phone} onChange={(e) => handleInputChange('phone', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">E-mail *</label>
-                    <input type="email" value={userData.email} onChange={(e) => onUpdate('email', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="email" value={userData.email} onChange={(e) => handleInputChange('email', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Data da Avaliação *</label>
-                    <input type="date" value={userData.date} onChange={(e) => onUpdate('date', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="date" value={userData.date} onChange={(e) => handleInputChange('date', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
                 <div>
                     <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Hora *</label>
-                    <input type="time" value={userData.time} onChange={(e) => onUpdate('time', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
+                    <input type="time" value={userData.time} onChange={(e) => handleInputChange('time', e.target.value)} className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition" />
                 </div>
             </div>
 
@@ -351,7 +364,7 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
                   rows={4} 
                   maxLength={item.field === 'observations' ? 500 : undefined}
                   value={userData[item.field] || ''} 
-                  onChange={(e) => onUpdate(item.field, e.target.value)} 
+                  onChange={(e) => handleInputChange(item.field, e.target.value)} 
                   placeholder={item.placeholder || ''}
                   className="w-full px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white focus:ring-2 focus:ring-blue-500 transition"
                 ></textarea>
@@ -452,6 +465,17 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
           </div>
         </div>
       )}
+
+      {/* Auto-save Toast Notification */}
+      <div className={`fixed bottom-6 right-6 z-50 bg-slate-800 dark:bg-white text-white dark:text-slate-900 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 transition-all duration-500 transform border-l-4 border-emerald-500 ${showSaveToast ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'}`}>
+        <div className="bg-emerald-500/20 p-1.5 rounded-full">
+            <Check size={16} className="text-emerald-400 dark:text-emerald-600" strokeWidth={3} />
+        </div>
+        <div>
+            <p className="text-sm font-bold leading-none">Salvo Automaticamente</p>
+            <p className="text-[10px] opacity-80 mt-0.5">Seus dados estão seguros.</p>
+        </div>
+      </div>
     </div>
   );
 };
