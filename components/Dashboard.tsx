@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LogOut, Plus, Search, Trash2, Sun, Moon, Eye, Play, Calendar, User, Edit, Sparkles, Loader2, FileText, Activity, Filter, X } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Theme, AssessmentRecord, AssessmentType } from '../types';
 
 interface DashboardProps {
@@ -49,8 +49,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     const timer = setTimeout(async () => {
       setAiLoading(true);
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
         // Simplifica os registros para o contexto da IA
         const condensedRecords = records.map(r => ({
           id: r.id,
@@ -61,9 +59,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           type: r.type
         }));
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: `Atue como um assistente de busca inteligente para uma clínica de fonoaudiologia.
+        const prompt = `Atue como um assistente de busca inteligente para uma clínica de fonoaudiologia.
           
           Query do usuário: "${searchTerm}"
           
@@ -73,18 +69,20 @@ const Dashboard: React.FC<DashboardProps> = ({
           Instruções:
           1. Analise a query e os dados dos pacientes.
           2. Identifique correspondências semânticas. Exemplo: se a busca for "autista", inclua pacientes com "TEA", "Autismo", ou descrições relacionadas. Se for "PROC", filtre pelo tipo.
-          3. Retorne APENAS um JSON array contendo as strings dos IDs dos registros relevantes.`,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            }
-          }
+          3. Retorne APENAS um JSON array contendo as strings dos IDs dos registros relevantes (ex: ["123", "456"]). NÃO use markdown.`;
+
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: prompt,
         });
 
-        const matches = JSON.parse(response.text || '[]');
-        setAiMatches(matches);
+        if (response.text) {
+            // Limpa markdown se houver (ex: ```json ... ```)
+            const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const matches = JSON.parse(cleanText);
+            setAiMatches(matches);
+        }
       } catch (error) {
         console.error("Erro na busca semântica:", error);
       } finally {
