@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
 import { AnswerData, UserData } from '../types';
@@ -7,13 +7,20 @@ interface ResultsProps {
   answers: AnswerData;
   userData: UserData;
   onNavigate: (view: 'registration' | 'landing') => void;
+  analysis: string;
+  onSaveAnalysis: (text: string) => void;
 }
 
-const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
+const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analysis, onSaveAnalysis }) => {
   // Estado da Análise IA
-  const [analysisText, setAnalysisText] = useState<string>('');
+  const [analysisText, setAnalysisText] = useState<string>(analysis || '');
   const [isGenerating, setIsGenerating] = useState(false);
   
+  // Atualiza estado local quando a prop muda
+  useEffect(() => {
+    setAnalysisText(analysis || '');
+  }, [analysis]);
+
   // Estado do Modal de Edição
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -134,7 +141,9 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
 
       const data = await response.json();
       if (data.status === 'success') {
-        setAnalysisText(data.response.trim());
+        const text = data.response.trim();
+        setAnalysisText(text);
+        onSaveAnalysis(text); // Salva automaticamente
       } else {
         alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
       }
@@ -189,6 +198,7 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
 
   const saveAnalysis = () => {
     setAnalysisText(editModal.text);
+    onSaveAnalysis(editModal.text); // Salva ao confirmar edição
     setEditModal({ isOpen: false, text: '' });
   };
 

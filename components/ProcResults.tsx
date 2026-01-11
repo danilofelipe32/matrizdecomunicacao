@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Printer, Edit, ArrowLeft, FileText, CheckCircle2, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { UserData, ProcAnswers, ProcChecklist } from '../types';
 import { procChecklistSections } from '../proc_constants';
@@ -10,12 +10,19 @@ interface ProcResultsProps {
   checklist: ProcChecklist;
   onNavigate: (view: 'registration' | 'landing') => void;
   onEdit: () => void;
+  analysis: string;
+  onSaveAnalysis: (text: string) => void;
 }
 
-const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist, onNavigate, onEdit }) => {
+const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist, onNavigate, onEdit, analysis, onSaveAnalysis }) => {
   // Estado da Análise IA
-  const [analysisText, setAnalysisText] = useState<string>('');
+  const [analysisText, setAnalysisText] = useState<string>(analysis || '');
   const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Atualiza estado local quando a prop muda
+  useEffect(() => {
+    setAnalysisText(analysis || '');
+  }, [analysis]);
   
   // Estado do Modal de Edição
   const [editModal, setEditModal] = useState<{
@@ -123,7 +130,9 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
 
       const data = await response.json();
       if (data.status === 'success') {
-        setAnalysisText(data.response.trim());
+        const text = data.response.trim();
+        setAnalysisText(text);
+        onSaveAnalysis(text); // Salva automaticamente
       } else {
         alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
       }
@@ -173,6 +182,7 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
 
   const saveAnalysis = () => {
     setAnalysisText(editModal.text);
+    onSaveAnalysis(editModal.text); // Salva a edição
     setEditModal({ isOpen: false, text: '' });
   };
 
