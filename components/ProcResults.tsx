@@ -1,9 +1,8 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { Printer, Edit, ArrowLeft, FileText, CheckCircle2, Sparkles, Loader2, Save, Send, X, Share2, BarChart2, PieChart } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import React, { useMemo, useState } from 'react';
+import { Printer, Edit, ArrowLeft, FileText, CheckCircle2, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { UserData, ProcAnswers, ProcChecklist } from '../types';
 import { procChecklistSections } from '../proc_constants';
-import { AI_CONTEXT_PROC, matrixRows } from '../constants';
+import { AI_CONTEXT_PROC } from '../constants';
 
 interface ProcResultsProps {
   userData: UserData;
@@ -11,19 +10,12 @@ interface ProcResultsProps {
   checklist: ProcChecklist;
   onNavigate: (view: 'registration' | 'landing') => void;
   onEdit: () => void;
-  analysis: string;
-  onSaveAnalysis: (text: string) => void;
 }
 
-const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist, onNavigate, onEdit, analysis, onSaveAnalysis }) => {
+const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist, onNavigate, onEdit }) => {
   // Estado da Análise IA
-  const [analysisText, setAnalysisText] = useState<string>(analysis || '');
+  const [analysisText, setAnalysisText] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  // Atualiza estado local quando a prop muda
-  useEffect(() => {
-    setAnalysisText(analysis || '');
-  }, [analysis]);
   
   // Estado do Modal de Edição
   const [editModal, setEditModal] = useState<{
@@ -123,21 +115,19 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
     `;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt })
       });
 
-      const newText = response.text?.trim();
-      if (newText) {
-        setAnalysisText(newText);
-        onSaveAnalysis(newText); // Salva automaticamente
+      const data = await response.json();
+      if (data.status === 'success') {
+        setAnalysisText(data.response.trim());
       } else {
-        alert("Erro ao gerar análise: Resposta vazia.");
+        alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
       }
     } catch (error) {
-      console.error(error);
       alert("Erro de conexão com o serviço de IA.");
     } finally {
       setIsGenerating(false);
@@ -162,17 +152,17 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
     `;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+      const response = await fetch('https://apifreellm.com/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt })
       });
-      const newText = response.text?.trim();
-      if (newText) {
-        setEditModal(prev => ({ ...prev, text: newText }));
+      const data = await response.json();
+      if (data.status === 'success') {
+        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
         setRefinement({ showInput: false, instruction: '', loading: false });
       } else {
-        alert("Erro ao refinar: Resposta vazia.");
+        alert("Erro ao refinar: " + data.error);
       }
     } catch {
       alert("Erro de conexão.");
@@ -183,7 +173,6 @@ const ProcResults: React.FC<ProcResultsProps> = ({ userData, answers, checklist,
 
   const saveAnalysis = () => {
     setAnalysisText(editModal.text);
-    onSaveAnalysis(editModal.text); // Salva ao confirmar edição
     setEditModal({ isOpen: false, text: '' });
   };
 
