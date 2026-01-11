@@ -53,6 +53,7 @@ export interface AssessmentRecord {
   procChecklist?: ProcChecklist; // Usado pelo PROC
   currentSection: string | null;
   progress: number;
+  clinicalAnalysis?: string; // Campo persistente para o parecer da IA
 }
 
 export interface AppState {
@@ -71,6 +72,7 @@ export interface AppState {
 
   userData: UserData;
   theme: Theme;
+  clinicalAnalysis: string | null; // Estado atual do parecer
 }
 
 // ... (Resto das interfaces da Matriz mantidas para compatibilidade)
@@ -125,5 +127,6 @@ export const initialState: AppState = {
   procAnswers: {},
   procChecklist: {},
   userData: initialUserData,
-  theme: 'light'
+  theme: 'light',
+  clinicalAnalysis: null
 };
