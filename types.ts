@@ -1,4 +1,5 @@
 
+
 export type ViewState = 'login' | 'landing' | 'registration' | 'triage' | 'assessment' | 'sectionSummary' | 'results' | 'procAssessment' | 'procResults';
 
 export type AnswerStatus = 'emergent' | 'mastered' | 'none';
@@ -53,6 +54,7 @@ export interface AssessmentRecord {
   procChecklist?: ProcChecklist; // Usado pelo PROC
   currentSection: string | null;
   progress: number;
+  clinicalAnalysis?: string; // Campo para persistir o parecer clínico
 }
 
 export interface AppState {
@@ -71,6 +73,7 @@ export interface AppState {
 
   userData: UserData;
   theme: Theme;
+  clinicalAnalysis: string | null; // Estado da análise clínica atual
 }
 
 // ... (Resto das interfaces da Matriz mantidas para compatibilidade)
@@ -125,5 +128,6 @@ export const initialState: AppState = {
   procAnswers: {},
   procChecklist: {},
   userData: initialUserData,
-  theme: 'light'
+  theme: 'light',
+  clinicalAnalysis: null
 };

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, Stethoscope, ChevronRight, Sparkles, Loader2, Edit, X, Send, Save, AlertCircle } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 import { UserData } from '../types';
 
 interface RegistrationProps {
@@ -127,20 +128,17 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: contextPrompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: contextPrompt,
       });
 
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        handleInputChange(field, data.response.trim()); // Usa handleInput para limpar erros se houver
-      } else if (data.error && data.error.includes("Rate limit")) {
-        alert("Limite de requisições da IA atingido. Aguarde 5 segundos.");
+      const newText = response.text?.trim();
+      if (newText) {
+        handleInputChange(field, newText); // Usa handleInput para limpar erros se houver
       } else {
-        alert("Erro ao gerar texto: " + (data.error || "Erro desconhecido"));
+        alert("Erro ao gerar texto: Resposta vazia.");
       }
     } catch (error) {
       console.error("Erro na requisição IA:", error);
@@ -183,19 +181,18 @@ const Registration: React.FC<RegistrationProps> = ({ userData, onUpdate, onNavig
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: contextPrompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: contextPrompt,
       });
 
-      const data = await response.json();
-
-      if (data.status === 'success') {
-        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+      const newText = response.text?.trim();
+      if (newText) {
+        setEditModal(prev => ({ ...prev, text: newText }));
         setRefinement({ showInput: false, instruction: '', loading: false });
       } else {
-        alert("Erro na IA: " + (data.error || "Erro desconhecido"));
+        alert("Erro na IA: Resposta vazia.");
         setRefinement(prev => ({ ...prev, loading: false }));
       }
     } catch (error) {

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
 import { AnswerData, UserData } from '../types';
 
@@ -7,13 +8,20 @@ interface ResultsProps {
   answers: AnswerData;
   userData: UserData;
   onNavigate: (view: 'registration' | 'landing') => void;
+  analysis: string;
+  onSaveAnalysis: (text: string) => void;
 }
 
-const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
+const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analysis, onSaveAnalysis }) => {
   // Estado da Análise IA
-  const [analysisText, setAnalysisText] = useState<string>('');
+  const [analysisText, setAnalysisText] = useState<string>(analysis || '');
   const [isGenerating, setIsGenerating] = useState(false);
   
+  // Atualiza estado local quando a prop muda
+  useEffect(() => {
+    setAnalysisText(analysis || '');
+  }, [analysis]);
+
   // Estado do Modal de Edição
   const [editModal, setEditModal] = useState<{
     isOpen: boolean;
@@ -126,19 +134,21 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
       });
 
-      const data = await response.json();
-      if (data.status === 'success') {
-        setAnalysisText(data.response.trim());
+      const newText = response.text?.trim();
+      if (newText) {
+        setAnalysisText(newText);
+        onSaveAnalysis(newText); // Salva automaticamente
       } else {
-        alert("Erro ao gerar análise: " + (data.error || "Erro desconhecido"));
+        alert("Erro ao gerar análise: Resposta vazia.");
       }
     } catch (error) {
+      console.error(error);
       alert("Erro de conexão com o serviço de IA.");
     } finally {
       setIsGenerating(false);
@@ -163,17 +173,18 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
     `;
 
     try {
-      const response = await fetch('https://apifreellm.com/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: prompt })
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
       });
-      const data = await response.json();
-      if (data.status === 'success') {
-        setEditModal(prev => ({ ...prev, text: data.response.trim() }));
+
+      const newText = response.text?.trim();
+      if (newText) {
+        setEditModal(prev => ({ ...prev, text: newText }));
         setRefinement({ showInput: false, instruction: '', loading: false });
       } else {
-        alert("Erro ao refinar: " + data.error);
+        alert("Erro ao refinar: Resposta vazia.");
       }
     } catch {
       alert("Erro de conexão.");
@@ -189,6 +200,7 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate }) => {
 
   const saveAnalysis = () => {
     setAnalysisText(editModal.text);
+    onSaveAnalysis(editModal.text); // Salva ao confirmar edição
     setEditModal({ isOpen: false, text: '' });
   };
 
