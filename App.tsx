@@ -51,7 +51,7 @@ const App: React.FC = () => {
   // Helper para calcular progresso
   const calculateProgress = (record: AssessmentRecord) => {
     if (record.type === 'PROC') {
-        // Cálculo simplificado para PROC
+        // Cálculo simplificado para PROC (baseado em campos preenchidos é difícil, vamos deixar manual ou 0/100 para simplificar no momento, ou baseado em se tem respostas)
         const keys = Object.keys(record.procAnswers || {});
         // Total aproximado de items no PROC ~35
         return keys.length > 0 ? (keys.length > 30 ? 100 : Math.round((keys.length / 35) * 100)) : 0;
@@ -83,8 +83,8 @@ const App: React.FC = () => {
                         procAnswers: newState.procAnswers, // Proc
                         procChecklist: newState.procChecklist, // Proc
                         currentSection: newState.currentSection,
-                        clinicalAnalysis: newState.clinicalAnalysis || undefined, // Persiste a análise
                         lastModified: Date.now(),
+                        // Progress calculation depends on type, logic handled inside calculateProgress but passed record needs updating
                     };
                     updatedRecord.progress = calculateProgress(updatedRecord);
                     
@@ -131,8 +131,7 @@ const App: React.FC = () => {
         procAnswers: {},
         procChecklist: {},
         currentSection: null,
-        progress: 0,
-        clinicalAnalysis: undefined
+        progress: 0
     };
 
     try {
@@ -148,8 +147,7 @@ const App: React.FC = () => {
           procChecklist: {},
           currentSection: null,
           activeQuestionIndex: 0,
-          view: 'registration', // Both start with registration
-          clinicalAnalysis: null
+          view: 'registration' // Both start with registration
       }));
     } catch (e) {
       alert("Erro ao criar novo registro no banco de dados.");
@@ -172,7 +170,6 @@ const App: React.FC = () => {
             procAnswers: record.procAnswers || {},
             procChecklist: record.procChecklist || {},
             currentSection: record.currentSection,
-            clinicalAnalysis: record.clinicalAnalysis || null,
             activeQuestionIndex: 0,
             view: hasStarted 
                 ? (isProc ? 'procAssessment' : 'results') // If started, go to assessment/results
@@ -192,7 +189,6 @@ const App: React.FC = () => {
             procAnswers: record.procAnswers || {},
             procChecklist: record.procChecklist || {},
             currentSection: record.currentSection,
-            clinicalAnalysis: record.clinicalAnalysis || null,
             view: 'registration'
         }));
     }
@@ -215,8 +211,7 @@ const App: React.FC = () => {
                       answers: {},
                       procAnswers: {},
                       procChecklist: {},
-                      currentSection: null,
-                      clinicalAnalysis: null
+                      currentSection: null
                   } : {})
               }));
               setModal(null);
@@ -317,11 +312,6 @@ const App: React.FC = () => {
       syncToRecords({ procChecklist: newChecklist });
   };
 
-  // --- ANALYSIS HANDLER ---
-  const handleSaveAnalysis = (text: string) => {
-      syncToRecords({ clinicalAnalysis: text });
-  };
-
   return (
     <>
       {state.view === 'login' && <Login onLogin={handleLogin} />}
@@ -376,8 +366,6 @@ const App: React.FC = () => {
           answers={state.answers}
           userData={state.userData}
           onNavigate={updateView}
-          analysis={state.clinicalAnalysis || ''}
-          onSaveAnalysis={handleSaveAnalysis}
         />
       )}
 
@@ -399,8 +387,6 @@ const App: React.FC = () => {
              userData={state.userData}
              onNavigate={updateView}
              onEdit={() => updateView('procAssessment')}
-             analysis={state.clinicalAnalysis || ''}
-             onSaveAnalysis={handleSaveAnalysis}
           />
       )}
 
