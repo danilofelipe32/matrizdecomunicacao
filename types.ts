@@ -1,5 +1,5 @@
 
-export type ViewState = 'login' | 'landing' | 'registration' | 'triage' | 'assessment' | 'sectionSummary' | 'results' | 'procAssessment' | 'procResults';
+export type ViewState = 'login' | 'landing' | 'registration' | 'triage' | 'assessment' | 'sectionSummary' | 'results' | 'procAssessment' | 'procResults' | 'comparison';
 
 export type AnswerStatus = 'emergent' | 'mastered' | 'none';
 
@@ -45,7 +45,8 @@ export interface UserData {
 
 export interface AssessmentRecord {
   id: string;
-  type: AssessmentType; // Novo campo para distinguir
+  patientId: string; // Novo campo para agrupar avaliações do mesmo paciente
+  type: AssessmentType; 
   lastModified: number;
   userData: UserData;
   answers: AnswerData; // Usado pela Matriz
@@ -53,7 +54,7 @@ export interface AssessmentRecord {
   procChecklist?: ProcChecklist; // Usado pelo PROC
   currentSection: string | null;
   progress: number;
-  clinicalAnalysis?: string; // Campo para persistir o parecer clínico
+  clinicalAnalysis?: string; 
 }
 
 export interface AppState {
@@ -72,15 +73,18 @@ export interface AppState {
 
   userData: UserData;
   theme: Theme;
-  clinicalAnalysis: string | null; // Estado da análise clínica atual
+  clinicalAnalysis: string | null;
+  
+  // Estado para comparação
+  comparisonRecords: AssessmentRecord[];
 }
 
 export interface LevelDefinition {
-  id: string; // Identificador único da linha (ex: "3_movimentos")
-  level: number; // O Nível da Matriz ao qual pertence (1-7)
-  category?: string; // Categoria visual (ex: "Movimentos Corporais")
-  label: string; // O texto da linha (ex: "Movimentos de corpo inteiro")
-  behaviors: string[]; // Detalhes ou exemplos
+  id: string; 
+  level: number; 
+  category?: string; 
+  label: string; 
+  behaviors: string[]; 
 }
 
 export interface Question {
@@ -129,5 +133,6 @@ export const initialState: AppState = {
   procChecklist: {},
   userData: initialUserData,
   theme: 'light',
-  clinicalAnalysis: null
+  clinicalAnalysis: null,
+  comparisonRecords: []
 };

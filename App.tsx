@@ -4,10 +4,11 @@ import Dashboard from './components/Dashboard';
 import Registration from './components/Registration';
 import Triage from './components/Triage';
 import Assessment from './components/Assessment';
-import ProcAssessment from './components/ProcAssessment'; // Novo componente
+import ProcAssessment from './components/ProcAssessment';
 import SectionSummary from './components/SectionSummary';
 import Results from './components/Results';
-import ProcResults from './components/ProcResults'; // Novo componente
+import ProcResults from './components/ProcResults';
+import Comparison from './components/Comparison'; // Importa o novo componente
 import { AppState, initialState, AnswerStatus, UserData, Theme, AssessmentRecord, initialUserData, AssessmentType, ProcAnswers, ProcChecklist } from './types';
 import { questionsData } from './constants';
 import { db } from './db';
@@ -51,7 +52,6 @@ const App: React.FC = () => {
   // Helper para calcular progresso
   const calculateProgress = (record: AssessmentRecord) => {
     if (record.type === 'PROC') {
-        // Cálculo simplificado para PROC (baseado em campos preenchidos é difícil, vamos deixar manual ou 0/100 para simplificar no momento, ou baseado em se tem respostas)
         const keys = Object.keys(record.procAnswers || {});
         // Total aproximado de items no PROC ~35
         return keys.length > 0 ? (keys.length > 30 ? 100 : Math.round((keys.length / 35) * 100)) : 0;
@@ -120,13 +120,33 @@ const App: React.FC = () => {
 
   // --- GERENCIAMENTO DE REGISTROS ---
 
-  const handleCreateNewRecord = async (type: AssessmentType = 'MATRIX') => {
+  // Agora aceita um patientId opcional para criar avaliação vinculada
+  const handleCreateNewRecord = async (type: AssessmentType = 'MATRIX', existingPatientId?: string) => {
     const newId = Date.now().toString();
+    
+    // Se existir patientId, buscamos os dados do paciente mais recente
+    let prepopulatedData = { ...initialUserData, date: new Date().toISOString().split('T')[0] };
+    const patientId = existingPatientId || newId; // Se não existir, o ID do paciente é o ID do primeiro registro (simplificação)
+
+    if (existingPatientId) {
+        const patientRecords = state.records.filter(r => (r.patientId === existingPatientId) || (r.id === existingPatientId)); // Fallback para registros antigos onde id era chave única
+        if (patientRecords.length > 0) {
+            // Pega o mais recente
+            const latest = patientRecords.sort((a,b) => b.lastModified - a.lastModified)[0];
+            prepopulatedData = { 
+                ...latest.userData, 
+                date: new Date().toISOString().split('T')[0],
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+        }
+    }
+
     const newRecord: AssessmentRecord = {
         id: newId,
-        type: type, // Defines if Matrix or PROC
+        patientId: patientId, // Vincula ao paciente
+        type: type, 
         lastModified: Date.now(),
-        userData: { ...initialUserData, date: new Date().toISOString().split('T')[0] },
+        userData: prepopulatedData,
         answers: {},
         procAnswers: {},
         procChecklist: {},
@@ -148,7 +168,7 @@ const App: React.FC = () => {
           procChecklist: {},
           currentSection: null,
           activeQuestionIndex: 0,
-          view: 'registration', // Both start with registration
+          view: 'registration', 
           clinicalAnalysis: null
       }));
     } catch (e) {
@@ -175,8 +195,8 @@ const App: React.FC = () => {
             clinicalAnalysis: record.clinicalAnalysis || null,
             activeQuestionIndex: 0,
             view: hasStarted 
-                ? (isProc ? 'procAssessment' : 'results') // If started, go to assessment/results
-                : 'registration' // Else registration
+                ? (isProc ? 'procAssessment' : 'results') 
+                : 'registration' 
         }));
     }
   };
@@ -225,6 +245,15 @@ const App: React.FC = () => {
             }
         }
     });
+  };
+
+  // --- COMPARAÇÃO ---
+  const handleCompareRecords = (recordsToCompare: AssessmentRecord[]) => {
+      setState(prev => ({
+          ...prev,
+          comparisonRecords: recordsToCompare,
+          view: 'comparison'
+      }));
   };
 
   // --- DATA HANDLERS ---
@@ -334,6 +363,7 @@ const App: React.FC = () => {
           onSelectRecord={handleSelectRecord}
           onEditRecord={handleEditRecord}
           onDeleteRecord={handleDeleteRecord}
+          onCompareRecords={handleCompareRecords}
           onLogout={handleLogout}
         />
       )}
@@ -401,6 +431,14 @@ const App: React.FC = () => {
              onEdit={() => updateView('procAssessment')}
              analysis={state.clinicalAnalysis || ''}
              onSaveAnalysis={handleSaveAnalysis}
+          />
+      )}
+
+      {/* COMPARISON VIEW */}
+      {state.view === 'comparison' && (
+          <Comparison 
+             records={state.comparisonRecords}
+             onBack={() => updateView('landing')}
           />
       )}
 
