@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart2, Printer, Edit, PieChart, ArrowLeft, Sparkles, Loader2, Save, Send, X, Share2 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import { matrixRows, AI_CONTEXT_MATRIX } from '../constants';
+import { matrixRows, AI_CONTEXT_MATRIX, questionsData } from '../constants';
 import { AnswerData, UserData } from '../types';
 
 interface ResultsProps {
@@ -54,24 +54,45 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
 
     let scores: number[] = [];
 
+    // Lógica Atualizada: Itera sobre as definições das questões para encontrar sub-linhas
     matrixRows.forEach(row => {
-      row.levels.forEach(lvl => {
-        // Contagem por Categoria
-        if (categories[row.category]) {
-            categories[row.category].total++;
-        }
-        // Contagem por Nível
-        if (levels[lvl]) {
-            levels[lvl].total++;
-        }
+      // row.levels é [3, 4, 5, ...] (Níveis numéricos da matriz)
+      // row.qId é "C1", "B2", etc.
+      
+      const questionDef = questionsData.find(q => q.id === row.qId);
+      
+      row.levels.forEach(lvlNum => {
+        // Encontra todas as linhas que pertencem a este nível nesta questão
+        const subLines = questionDef?.levels.filter(l => l.level === lvlNum) || [];
+        
+        if (subLines.length > 0) {
+            // Contagem por Categoria
+            if (categories[row.category]) {
+                categories[row.category].total++;
+            }
+            // Contagem por Nível
+            if (levels[lvlNum]) {
+                levels[lvlNum].total++;
+            }
 
-        const status = answers[row.qId]?.[lvl] || 'none';
-        if (status === 'mastered') {
-          if(categories[row.category]) categories[row.category].master++;
-          if(levels[lvl]) levels[lvl].master++;
-          scores.push(1);
-        } else {
-          scores.push(0);
+            // Verifica se ALGUMA das sub-linhas desse nível está marcada como 'mastered'
+            // Na Matriz de Comunicação, geralmente se a criança usa UMA forma naquele nível, o nível é pontuado.
+            // Para "Emergente", se não for Mastered mas tiver Emergent.
+            let isMastered = false;
+            
+            subLines.forEach(line => {
+                if (answers[row.qId]?.[line.id] === 'mastered') {
+                    isMastered = true;
+                }
+            });
+
+            if (isMastered) {
+                if(categories[row.category]) categories[row.category].master++;
+                if(levels[lvlNum]) levels[lvlNum].master++;
+                scores.push(1);
+            } else {
+                scores.push(0);
+            }
         }
       });
     });
@@ -363,7 +384,8 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
             {matrixRows.map((row, idx) => {
               const isCat = idx === 0 || matrixRows[idx - 1].category !== row.category;
               const borderTop = isCat ? 'border-t-2 border-slate-400 dark:border-slate-500 mt-2 print:mt-0 print:border-t-2 print:border-slate-800' : 'border-t border-slate-200 dark:border-slate-600 print:border-slate-300';
-              
+              const questionDef = questionsData.find(q => q.id === row.qId);
+
               return (
                 <div key={idx} className="grid grid-cols-[200px_repeat(7,1fr)] hover:bg-slate-50 dark:hover:bg-slate-700 print:hover:bg-transparent break-inside-avoid">
                   <div className={`p-2 text-xs font-bold border-r border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 print:text-black flex items-center ${borderTop} print:border-slate-400 bg-slate-50/50 dark:bg-slate-800 print:bg-transparent`}>
@@ -375,8 +397,24 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
                     <span className="truncate leading-tight">{row.label}</span>
                   </div>
                   {[1, 2, 3, 4, 5, 6, 7].map(l => {
-                    const st = answers[row.qId]?.[l];
                     const app = row.levels.includes(l);
+                    
+                    // Determine status by checking all sub-rows for this level
+                    let st = 'none';
+                    if (app && questionDef) {
+                        const subRows = questionDef.levels.filter(lvl => lvl.level === l);
+                        for (const r of subRows) {
+                            const ans = answers[row.qId]?.[r.id];
+                            if (ans === 'mastered') {
+                                st = 'mastered';
+                                break; // Prioridade para Dominado
+                            }
+                            if (ans === 'emergent') {
+                                st = 'emergent';
+                            }
+                        }
+                    }
+
                     let bgClass = 'bg-slate-50 dark:bg-slate-900 print:bg-transparent';
                     let bar = null;
 

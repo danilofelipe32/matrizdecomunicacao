@@ -256,14 +256,14 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleAnswer = (qId: string, level: number, type: 'emergent' | 'mastered') => {
+  const handleAnswer = (qId: string, rowId: string, type: 'emergent' | 'mastered') => {
     const currentAnswers = { ...state.answers };
     if (!currentAnswers[qId]) currentAnswers[qId] = {};
-    const currentStatus = currentAnswers[qId][level];
+    const currentStatus = currentAnswers[qId][rowId];
     let newStatus: AnswerStatus = 'none';
     if (type === 'emergent') newStatus = (currentStatus === 'emergent') ? 'none' : 'emergent';
     else if (type === 'mastered') newStatus = (currentStatus === 'mastered') ? 'none' : 'mastered';
-    currentAnswers[qId][level] = newStatus;
+    currentAnswers[qId][rowId] = newStatus;
     syncToRecords({ answers: currentAnswers });
   };
 

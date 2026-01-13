@@ -10,7 +10,7 @@ export type AssessmentType = 'MATRIX' | 'PROC';
 // --- Matriz Types ---
 export interface AnswerData {
   [questionId: string]: {
-    [level: number]: AnswerStatus;
+    [rowId: string]: AnswerStatus;
   };
 }
 
@@ -75,11 +75,12 @@ export interface AppState {
   clinicalAnalysis: string | null; // Estado da análise clínica atual
 }
 
-// ... (Resto das interfaces da Matriz mantidas para compatibilidade)
 export interface LevelDefinition {
-  level: number;
-  label: string;
-  behaviors: string[];
+  id: string; // Identificador único da linha (ex: "3_movimentos")
+  level: number; // O Nível da Matriz ao qual pertence (1-7)
+  category?: string; // Categoria visual (ex: "Movimentos Corporais")
+  label: string; // O texto da linha (ex: "Movimentos de corpo inteiro")
+  behaviors: string[]; // Detalhes ou exemplos
 }
 
 export interface Question {

@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   // Carrega variáveis de ambiente do diretório atual.
   // O terceiro parâmetro '' diz ao Vite para carregar todas as variáveis, 
   // não apenas as que começam com VITE_. Isso permite ler 'API_KEY' direto da Vercel.
-  const env = loadEnv(mode, process.cwd(), '');
+  const env = loadEnv(mode, (process as any).cwd(), '');
 
   return {
     plugins: [react()],
