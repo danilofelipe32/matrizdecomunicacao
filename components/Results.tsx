@@ -373,7 +373,7 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
         <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-3 print:mb-2 flex items-center gap-2">
             <BarChart2 size={20} className="text-blue-600 dark:text-blue-400" /> Matriz Visual
         </h3>
-        <div className="bg-white dark:bg-slate-800 p-1 rounded shadow-lg border dark:border-slate-700 overflow-x-auto mb-8 print:border-2 print:border-slate-800 print:shadow-none print:overflow-visible print:mb-6">
+        <div className="bg-white dark:bg-slate-800 p-1 rounded shadow-lg border dark:border-slate-700 overflow-x-auto mb-4 print:border-2 print:border-slate-800 print:shadow-none print:overflow-visible print:mb-4">
           <div className="min-w-[800px] print:min-w-0 print:w-full print:scale-95 origin-top-left">
             <div className="grid grid-cols-[200px_repeat(7,1fr)] bg-slate-100 dark:bg-slate-700 border-b dark:border-slate-600 print:bg-slate-200 print:text-black print:border-slate-400">
               <div className="p-2 font-bold text-xs flex items-center justify-center text-slate-800 dark:text-white print:text-black">Intenção / Nível</div>
@@ -436,6 +436,10 @@ const Results: React.FC<ResultsProps> = ({ answers, userData, onNavigate, analys
               );
             })}
           </div>
+        </div>
+
+        <div className="mb-8 text-xs text-slate-500 dark:text-slate-400 text-center italic print:mb-6">
+            Legenda: <strong>NU</strong> = Não Usado | <strong>E</strong> = Emergente | <strong>D</strong> = Dominado
         </div>
 
         <div className="page-break"></div>
