@@ -25,9 +25,15 @@ const SectionSummary: React.FC<SectionSummaryProps> = ({ section, answers, onNex
 
     sectionQuestions.forEach(q => {
       q.levels.forEach(lvl => {
+        // Inicializa o objeto de estatísticas para este nível se não existir
         if (!levelStats[lvl.level]) {
+          // Busca um rótulo genérico para o nível, tentando pegar o category ou um padrão
+          const levelLabel = lvl.category 
+            ? `${lvl.category} (Nível ${lvl.level})` 
+            : `Nível ${lvl.level}`;
+
           levelStats[lvl.level] = {
-            label: lvl.label,
+            label: `Nível ${lvl.level}`, // Mantém agrupado por Nível Numérico (I, II, III...)
             total: 0,
             mastered: 0,
             emergent: 0,
@@ -37,7 +43,9 @@ const SectionSummary: React.FC<SectionSummaryProps> = ({ section, answers, onNex
         
         levelStats[lvl.level].total += 1;
         
-        const status = answers[q.id]?.[lvl.level] || 'none';
+        // CORREÇÃO AQUI: Usa lvl.id em vez de lvl.level para buscar a resposta
+        const status = answers[q.id]?.[lvl.id] || 'none';
+        
         if (status === 'mastered') levelStats[lvl.level].mastered += 1;
         else if (status === 'emergent') levelStats[lvl.level].emergent += 1;
         else levelStats[lvl.level].none += 1;
@@ -46,9 +54,10 @@ const SectionSummary: React.FC<SectionSummaryProps> = ({ section, answers, onNex
 
     return {
       totalQuestions: sectionQuestions.length,
-      levels: Object.values(levelStats).sort((a, b) => {
-         return 0; 
-      })
+      // Ordena os níveis numericamente
+      levels: Object.entries(levelStats)
+        .sort(([a], [b]) => Number(a) - Number(b))
+        .map(([_, val]) => val)
     };
   }, [section, answers]);
 
@@ -76,40 +85,45 @@ const SectionSummary: React.FC<SectionSummaryProps> = ({ section, answers, onNex
           <div className="p-8">
             <div className="mb-6">
               <h3 className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">Desempenho por Nível</h3>
-              <div className="space-y-4">
-                {summaryData.levels.map((lvl, idx) => (
-                  <div key={idx} className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="font-bold text-slate-800 dark:text-white">{lvl.label}</span>
-                      <span className="text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
-                        {lvl.total} Habilidades Avaliadas
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">
-                        <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full">
-                          <CheckCircle size={16} className="text-blue-600 dark:text-blue-400" />
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold text-slate-800 dark:text-white">{lvl.mastered}</div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Dominadas</div>
-                        </div>
+              
+              {summaryData.levels.length === 0 ? (
+                 <p className="text-center text-slate-400 py-4">Nenhum dado registrado para esta seção.</p>
+              ) : (
+                <div className="space-y-4">
+                  {summaryData.levels.map((lvl, idx) => (
+                    <div key={idx} className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="font-bold text-slate-800 dark:text-white">{lvl.label}</span>
+                        <span className="text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-full">
+                          {lvl.total} Habilidades Avaliadas
+                        </span>
                       </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">
+                          <div className="bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full">
+                            <CheckCircle size={16} className="text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-bold text-slate-800 dark:text-white">{lvl.mastered}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Dominadas</div>
+                          </div>
+                        </div>
 
-                      <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">
-                        <div className="bg-yellow-100 dark:bg-yellow-900/30 p-2 rounded-full">
-                          <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
-                        </div>
-                        <div>
-                          <div className="text-xl font-bold text-slate-800 dark:text-white">{lvl.emergent}</div>
-                          <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Emergentes</div>
+                        <div className="flex items-center gap-3 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">
+                          <div className="bg-yellow-100 dark:bg-yellow-900/30 p-2 rounded-full">
+                            <AlertCircle size={16} className="text-yellow-600 dark:text-yellow-400" />
+                          </div>
+                          <div>
+                            <div className="text-xl font-bold text-slate-800 dark:text-white">{lvl.emergent}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400 font-medium">Emergentes</div>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <p className="text-center text-slate-500 dark:text-slate-400 text-sm italic mb-8">
