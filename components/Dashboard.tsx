@@ -198,14 +198,14 @@ const Dashboard: React.FC<DashboardProps> = ({
                     )}
                 </button>
 
-                {/* Notification Dropdown */}
+                {/* Notification Dropdown Responsive: Fixed on Mobile, Absolute on Desktop */}
                 {showNotifications && (
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="fixed left-4 right-4 top-24 md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-80 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
                         <div className="p-3 bg-slate-50 dark:bg-slate-750 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
                             <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Insights & Alertas</h3>
                             <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
                         </div>
-                        <div className="max-h-80 overflow-y-auto">
+                        <div className="max-h-[60vh] md:max-h-80 overflow-y-auto">
                             {notifications.length === 0 ? (
                                 <div className="p-6 text-center text-slate-400 text-sm">
                                     <Sparkles className="mx-auto mb-2 opacity-50" size={24} />
